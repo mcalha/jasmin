@@ -98,6 +98,7 @@ public class Registers {
 		value <<= address.rshift;
 		address.shortcut.value = (address.shortcut.value & ~address.mask) | (value & address.mask);
 		this.dirty[address.address] = dirtyTimeStamp;
+//System.out.println("Registers - set reg:" + address.address + ",value:" + address.shortcut.value);
 		// notifyListeners(address, (int) value);
 	}
 	

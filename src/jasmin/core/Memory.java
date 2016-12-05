@@ -5,7 +5,7 @@ import java.util.LinkedList;
 
 /**
  * replacement for the object Byte which is signed.
- * Addtionally there is a dirty tag to trace when the byte has been changed.
+ * Additionally there is a dirty tag to trace when the byte has been changed.
  * Serializable in order to be able to be saved to file by ObjectOutputStream
  * 
  * @author Yang Guo

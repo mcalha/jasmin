@@ -112,7 +112,7 @@ public class DataSpace {
 	private boolean addressOutOfRange = false;
 	
 	/**
-	 * Checks whether an access to an invalid (out-of-range) address occured. The corresponding flag must be
+	 * Checks whether an access to an invalid (out-of-range) address occurred. The corresponding flag must be
 	 * reset
 	 * manually afterwards!
 	 * 
@@ -227,29 +227,29 @@ public class DataSpace {
 		reg = new Registers();
 		regInfo = new TreeMap<Integer, MemCellInfo>();
 		EAX = reg.constructAddress("EAX", regtable);
-		AX = reg.constructAddress("AX", regtable);
-		AH = reg.constructAddress("AH", regtable);
-		AL = reg.constructAddress("AL", regtable);
+		AX  = reg.constructAddress("AX", regtable);
+		AH  = reg.constructAddress("AH", regtable);
+		AL  = reg.constructAddress("AL", regtable);
 		EBX = reg.constructAddress("EBX", regtable);
-		BX = reg.constructAddress("BX", regtable);
-		BH = reg.constructAddress("BH", regtable);
-		BL = reg.constructAddress("BL", regtable);
+		BX  = reg.constructAddress("BX", regtable);
+		BH  = reg.constructAddress("BH", regtable);
+		BL  = reg.constructAddress("BL", regtable);
 		ECX = reg.constructAddress("ECX", regtable);
-		CX = reg.constructAddress("CX", regtable);
-		CH = reg.constructAddress("CH", regtable);
-		CL = reg.constructAddress("CL", regtable);
+		CX  = reg.constructAddress("CX", regtable);
+		CH  = reg.constructAddress("CH", regtable);
+		CL  = reg.constructAddress("CL", regtable);
 		EDX = reg.constructAddress("EDX", regtable);
-		DX = reg.constructAddress("DX", regtable);
-		DH = reg.constructAddress("DH", regtable);
-		DL = reg.constructAddress("DL", regtable);
+		DX  = reg.constructAddress("DX", regtable);
+		DH  = reg.constructAddress("DH", regtable);
+		DL  = reg.constructAddress("DL", regtable);
 		ESI = reg.constructAddress("ESI", regtable);
-		SI = reg.constructAddress("SI", regtable);
+		SI  = reg.constructAddress("SI", regtable);
 		EDI = reg.constructAddress("EDI", regtable);
-		DI = reg.constructAddress("DI", regtable);
+		DI  = reg.constructAddress("DI", regtable);
 		ESP = reg.constructAddress("ESP", regtable);
-		SP = reg.constructAddress("SP", regtable);
+		SP  = reg.constructAddress("SP", regtable);
 		EBP = reg.constructAddress("EBP", regtable);
-		BP = reg.constructAddress("BP", regtable);
+		BP  = reg.constructAddress("BP", regtable);
 		EIP = reg.constructAddress("EIP", regtable);
 		
 		registerSets = new RegisterSet[9];
@@ -278,7 +278,7 @@ public class DataSpace {
 	// and the same (in the reversed order) in the load() method
 	
 	/**
-	 * save the relevante data to file therefore it will be zipped and buffered
+	 * save the relevant data to file therefore it will be zipped and buffered
 	 * 
 	 * @param file
 	 *        file to be saved to
@@ -405,6 +405,7 @@ public class DataSpace {
 	 */
 	private void putInteger(long value, Address address) {
 		if ((address.type & Op.REG) != 0) {
+//System.out.println("DataSpace - putInteger - reg.set");
 			reg.set(address, value);
 		} else if ((address.type & Op.MEM) != 0) {
 			if ((address.address < memAddressStart)
@@ -412,6 +413,7 @@ public class DataSpace {
 				addressOutOfRange = true;
 				return;
 			}
+//System.out.println("DataSpace - putInteger - memory.set");
 			long mask = 255; // bitmask to filter 8 bits
 			int bytebuffer = 0; // somewhere to save the 8 bits
 			for (int i = 0; i < address.size; i++) {
@@ -698,8 +700,10 @@ public class DataSpace {
 	public MemCellInfo memInfo(Address a) {
 		Integer index = a.address;
 		if (Op.matches(a.type, Op.MEM)) {
+//System.out.println("DataSpace - memInfo - memInfo index:" + index);
 			return memInfo.get(index);
 		} else if (Op.matches(a.type, Op.REG)) {
+//System.out.println("DataSpace - memInfo - regInfo index:" + index);
 			return regInfo.get(index);
 		}
 		return null;
@@ -708,24 +712,31 @@ public class DataSpace {
 	private void memInfoPut(Address a, MemCellInfo info) {
 		Integer index = a.address;
 		if (Op.matches(a.type, Op.MEM)) {
+//System.out.println("DataSpace - memInfoPut - memInfo index:" + index);
 			if ((a.address >= (MEMSIZE + memAddressStart)) || (a.address < memAddressStart)) {
 				return;
 			}
 			memInfo.put(index, info);
 		} else if (Op.matches(a.type, Op.REG)) {
+//System.out.println("DataSpace - memInfoPut - regInfo index:" + index);
 			regInfo.put(index, info);
 		}
 	}
 	
 	private void memInfoDelete(Address a) {
 		Integer index = a.address;
+//                Object ret=null;
 		if (Op.matches(a.type, Op.MEM)) {
 			if ((a.address >= (MEMSIZE + memAddressStart)) || (a.address < memAddressStart)) {
 				return;
 			}
-			memInfo.remove(index);
+                        memInfo.remove(index);
+			//ret = memInfo.remove(index);
+//System.out.println("DataSpace - memInfoDelete - memInfo index:" + index + " removed:" + ret);
 		} else if (Op.matches(a.type, Op.REG)) {
-			regInfo.remove(index);
+                        regInfo.remove(index);
+			//ret = regInfo.remove(index);
+//System.out.println("DataSpace - memInfoDelete - regInfo index:" + index + " removed:" + ret);
 		}
 	}
 	
@@ -794,8 +805,10 @@ public class DataSpace {
 		if ((a.type & (Op.MEM | Op.REG)) != 0) {
 			putInteger(value, a);
 			if (memCellInfo == null) {
+//System.out.println("DataSpace - put - memInfoDelete");
 				memInfoDelete(a);
 			} else {
+//System.out.println("DataSpace - put - memInfoPut");
 				memInfoPut(a, memCellInfo);
 			}
 			return;
