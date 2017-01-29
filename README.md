@@ -2,6 +2,19 @@
 Um fork do projeto Jasmin da Universidade Técnica de Munique. O desenvolvimento desta aplicação foi continuado por parte dos professores e alunos da FCUL.
 
 Ao longo do README vai ser usado o acrónimo TUM para designar a Universidade Técnica de Munique.
+
+** Não se esqueçam de alterar o JDK usado pelo NetBeans para remover quaisquer erros relacionados com --source 1.6 **
+Podem ler mais sobre isso [aqui](http://stackoverflow.com/questions/11110808/use-source-7-or-higher-to-enable-strings-in-switch-errornetbeans-7-1-2).
+
+Basta carregarem em cima da tab Projects e com o botão direito em cima do "Jasmin". Depois de irem as properties
+basta mudarem o "source/binary format" para o mais recente (o jasmin usa o mais velho por predefinição).
+Seguem-se uns screenshots para ajudar.
+
+[Step 1](https://i.imgsafe.org/e7c0f1decc.png)
+
+[Step 2](https://i.imgsafe.org/e7c0f924e3.png)
+
+[Step 3](https://i.imgsafe.org/e7c0fe94cc.png)
 ##
 O projeto é constituido por dois branches.
 * master - Desenvolvimento contínuo.
