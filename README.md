@@ -32,7 +32,9 @@ Caso o bug Parameters.pop(Address a) volte a aparecer a única coisa que temos q
 
 - Patch 2 - 
 
-/core/Registers.java - o ficheiro do TUM estava vários commits à frente com bastantes alterações. Atualizaram a função principal permitindo maior legibilidade e maior rapidez. Pelos vistos eles deram de caras com um problema e resolveram-no.
+/core/Registers.java - o ficheiro do TUM estava vários commits à frente com bastantes alterações. Atualizaram
+a função principal permitindo maior legibilidade e maior rapidez. Pelos vistos eles deram de caras com um
+problema e resolveram-no.
 /gui/FpuStackTableModel.java - [optimizations]
 src/jasmin/gui/HelpBrowser.java - [optimizations]
 /gui/JasDocument.java - [optimizations]
