@@ -1,42 +1,45 @@
 /**
- * 
+ *
  */
 package jasmin.core;
 
 import java.util.Hashtable;
 
 /**
- * @author Jakob Kummerow
+ * @author Jakob Kummerow, Florian Dollinger
  */
 public class Registers {
-	
-	int NUMREG = 9; // A, B, C, D, SI, DI, SP, BP, IP
-	
-	LongWrapper[] reg;
-	
+
+	private int NUMREG = 9; // A, B, C, D, SI, DI, SP, BP, IP
+
+	private LongWrapper[] reg;
+
 	/**
 	 * the dirty tag / works like a time stamp
 	 */
 	private int dirty[];
-	
+        private int dirtyParts[];
+
 	/**
 	 * the "timestamp" which goes up on every call to updateDirty()
 	 */
 	private int dirtyTimeStamp;
-	
+
 	// @SuppressWarnings("unchecked")
 	public Registers() {
 		reg = new LongWrapper[9];
 		dirty = new int[NUMREG];
+		dirtyParts = new int[NUMREG];
 		for (int i = 0; i < NUMREG; i++) {
 			reg[i] = new LongWrapper();
 			dirty[i] = Integer.MIN_VALUE;
+			dirtyParts[i] = 0;
 		}
 		dirtyTimeStamp = Integer.MIN_VALUE + 2;
-		// addressedListeners = new LinkedList[NUMREG];
-		// globalListeners = new LinkedList<IListener>();
+		// addressedListeners = new ArrayList[NUMREG];
+		// globalListeners = new ArrayList<IListener>();
 	}
-	
+
 	public Address constructAddress(String registerName, Hashtable<String, Address> registerTable) {
 		// if the register address exists already, return it
 		Address register = registerTable.get(registerName);
@@ -90,18 +93,69 @@ public class Registers {
 		register.shortcut = reg[register.address];
 		// add the new object to the register table
 		registerTable.put(registerName, register);
-		
+
 		return register;
 	}
-	
+
+        /*
+        * @param reg
+        * @return returns the name of the given registerpart (L: LOW, H: HIGH, X: LOW and HIGH, E: EXTENDED)
+        */
+        public char registerType(Address reg){
+
+            // LOW or HIGH
+            if(reg.type == Op.R8){
+                // LOW
+                    if(reg.rshift == 0){
+                            return 'L';
+                    // HIGH
+                    } else if(reg.rshift == 8){
+                            return 'H';
+                    }
+
+            // X
+            } else if(reg.type == Op.R16){
+                return 'X';
+
+            // EXTENDED
+            } else if(reg.type == Op.R32){
+                return 'E';
+            }
+
+            return 'U'; // Unknown
+        }
+
+
 	public void set(Address address, long value) {
+
+                // Set the value
 		value <<= address.rshift;
 		address.shortcut.value = (address.shortcut.value & ~address.mask) | (value & address.mask);
+
+                // Set the "time" of last change
 		this.dirty[address.address] = dirtyTimeStamp;
-//System.out.println("Registers - set reg:" + address.address + ",value:" + address.shortcut.value);
+
+                // Set the parts that are changed
+                switch(registerType(address)){
+                    case 'L':
+                        this.dirtyParts[address.address] = 0b0001;
+                        break;
+                    case 'H':
+                        this.dirtyParts[address.address] = 0b0010;
+                        break;
+                    case 'X':
+                        this.dirtyParts[address.address] = 0b0011;
+                        break;
+                    case 'E':
+                        this.dirtyParts[address.address] = 0b1111;
+                        break;
+                    default:
+                }
+
 		// notifyListeners(address, (int) value);
+
 	}
-	
+
 	/**
 	 * resets the whole thing
 	 */
@@ -111,22 +165,43 @@ public class Registers {
 		}
 		clearDirty();
 	}
-	
+
 	/**
 	 * set dirty tag to the initial value
 	 */
 	public void setDirty(Address address) {
 		this.dirty[address.address] = dirtyTimeStamp;
 	}
-	
+
 	/**
+	 * @param address
 	 * @param steps
 	 * @return if the byte has been changed in the last given steps
 	 */
 	public boolean isDirty(Address address, int steps) {
-		return ((dirtyTimeStamp - dirty[address.address]) <= steps);
+
+            if((dirtyTimeStamp - dirty[address.address]) <= steps){
+
+                switch(registerType(address)){
+
+                    case 'L':
+                        return (this.dirtyParts[address.address] & 0b0001) == 0b0001;
+                    case 'H':
+                        return (this.dirtyParts[address.address] & 0b0010) == 0b0010;
+                    case 'X':
+                        return (this.dirtyParts[address.address] & 0b0011) == 0b0011;
+                    case 'E':
+                        return (this.dirtyParts[address.address] & 0b1111) == 0b1111;
+                    default:
+                        return false;
+
+                }
+
+            }
+
+            return false;
 	}
-	
+
 	/**
 	 * update the dirty state, that is, decrement the dirty tag by 1
 	 */
@@ -136,14 +211,14 @@ public class Registers {
 			clearDirty();
 		}
 	}
-	
+
 	/**
 	 * clear the dirty tag
 	 */
 	public void clearDirty(Address address) {
 		dirty[address.address] = Integer.MIN_VALUE;
 	}
-	
+
 	/**
 	 * clear all dirty tags
 	 */
@@ -153,30 +228,4 @@ public class Registers {
 			dirty[i] = Integer.MIN_VALUE;
 		}
 	}
-	
-	// //////////////////////////////////////
-	// LISTENER SUPPORT
-	/*
-	private LinkedList<IListener>[] addressedListeners;
-	private LinkedList<IListener> globalListeners;
-	
-	public void addListener(IListener l) {
-		globalListeners.add(l);
-	}
-	
-	public void removeListener(IListener l) {
-		globalListeners.remove(l);
-	}
-	
-	private void notifyListeners(Address address, int newValue) {
-		for (IListener l : globalListeners) {
-			l.notifyChanged(address.address, newValue);
-		}
-		if (addressedListeners[address.address] != null) {
-			for (IListener l : addressedListeners[address.address]) {
-				l.notifyChanged(address.address, newValue);
-			}
-		}
-	}
-	*/
 }
