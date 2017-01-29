@@ -20,11 +20,9 @@ import javax.swing.text.html.*;
  */
 public class HelpBrowser extends javax.swing.JPanel {
 	
-	private static final long serialVersionUID = 1611148227929564585L;
-	
 	private MainFrame mframe = null;
-	LinkedList<URL> history;
-	LinkedList<URL> forwardhistory;
+	List<URL> history;
+	List<URL> forwardhistory;
 	URL currentURL = null;
 	String[] fontNames = null;
 	
@@ -39,8 +37,8 @@ public class HelpBrowser extends javax.swing.JPanel {
 		initComponents();
 		HtmlPane.setContentType("text/html");
 		HtmlPane.setEditable(false);
-		history = new LinkedList<URL>();
-		forwardhistory = new LinkedList<URL>();
+		history = new ArrayList<URL>();
+		forwardhistory = new ArrayList<URL>();
 		HTMLEditorKit editorKit = createEditorKit();
 		HtmlPane.setEditorKit(editorKit);
 		fontNames = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
@@ -230,7 +228,7 @@ public class HelpBrowser extends javax.swing.JPanel {
 	}
 	
 	public void back() {
-		URL url = history.removeLast();
+		URL url = history.remove(history.size() - 1);
 		forwardhistory.add(currentURL);
 		try {
 			HtmlPane.setContentType("text/html");
@@ -243,7 +241,7 @@ public class HelpBrowser extends javax.swing.JPanel {
 	}
 	
 	public void forward() {
-		URL url = forwardhistory.removeLast();
+		URL url = forwardhistory.remove(history.size() - 1);
 		history.add(currentURL);
 		try {
 			HtmlPane.setContentType("text/html");
