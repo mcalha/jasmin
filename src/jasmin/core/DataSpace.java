@@ -940,7 +940,7 @@ public class DataSpace {
 			return null;
 		}
 		
-		return a = new Address(Op.MEM, size, result);
+		return new Address(Op.MEM, size, result);
 	}
 	
 	/**

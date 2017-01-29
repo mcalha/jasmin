@@ -10,6 +10,7 @@ import jasmin.core.Parser;
 import java.awt.*;
 import java.net.URL;
 import java.util.*;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.text.*;
