@@ -6,13 +6,8 @@ O projeto é constituido por dois branches.
 * stable - Um backup da última versão estável.
 
 ### Changelog
-```
-Master
-1.4.2 - Merge de várias otimizações feitas pela Universidade Técnica de Munique.
-```
-
-```
 Stable
+```
 1.4.2 - Merge de várias otimizações feitas pela Universidade Técnica de Munique. 
 ```
 
