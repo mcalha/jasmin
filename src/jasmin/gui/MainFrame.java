@@ -19,7 +19,6 @@ import javax.swing.undo.*;
  */
 public class MainFrame extends javax.swing.JFrame {
 
-    private static final long serialVersionUID = 1L;
     private JasDocument document = null;
     private HelpBrowser helpDocument = null;
     public JFileChooser fileChooser = new JFileChooser();
@@ -35,6 +34,12 @@ public class MainFrame extends javax.swing.JFrame {
             properties = new Properties();
 
             if (!propfile.exists()) {
+
+                if (!propfile.createNewFile()) {
+ 					JOptionPane.showMessageDialog(this, "Could not create:" + propfile.toString());
+ 					System.exit(1);
+ 				}
+
                 propfile.createNewFile();
                 putProperty("font", "Sans Serif");
                 putProperty("font.size", "12");
@@ -124,8 +129,7 @@ public class MainFrame extends javax.swing.JFrame {
      * @param key
      */
     public String getProperty(String key) {
-        String result = properties.getProperty(key);
-        return result;
+        return properties.getProperty(key);
     }
 
     public int getProperty(String key, int oldvalue) {

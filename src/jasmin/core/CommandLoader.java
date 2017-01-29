@@ -38,8 +38,7 @@ public class CommandLoader {
 	 */
 	static String classPath() {
 		String classPath = System.getProperty("java.class.path");
-		String ret = classPath.split(File.pathSeparator)[0];
-		return ret;
+		return classPath.split(File.pathSeparator)[0];
 	}
 	
 	/**
@@ -220,7 +219,7 @@ public class CommandLoader {
 	 * checks if a mnemo exist
 	 */
 	public boolean commandExists(String mnemo) {
-		return (commands.get(mnemo) == null) ? false : true;
+		return commands.get(mnemo) != null;
 	}
 	
 	/**

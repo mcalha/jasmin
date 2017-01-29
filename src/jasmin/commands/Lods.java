@@ -19,10 +19,7 @@ public class Lods extends JasminCommand {
 	
 	@Override
 	public boolean overrideMaxMemAccess(String mnemo) {
-		if (mnemo.startsWith("MOVS") || mnemo.startsWith("CMPS")) {
-			return true;
-		}
-		return false;
+		return mnemo.startsWith("MOVS") || mnemo.startsWith("CMPS");
 	}
 	
 	@Override
@@ -97,7 +94,7 @@ public class Lods extends JasminCommand {
 			return;
 		} else if (p.mnemo.startsWith("LODS")) {
 			dest = dataspace.getMatchingRegister(dataspace.EAX, p.size);
-			src = p.get(dataspace.ESI);
+			src = p.get(new Address(Op.MEM, p.size, (int) dataspace.ESI.getShortcut()));
 			increaseDecreaseRegister(dataspace.ESI, p.size);
 		} else if (p.mnemo.startsWith("STOS")) {
 			dest = new Address(Op.MEM, p.size, (int) dataspace.EDI.getShortcut());
@@ -121,11 +118,7 @@ public class Lods extends JasminCommand {
 	}
 	
 	private boolean testCondition(String prefix) {
-		if (prefix.equals("REP")) {
-			return true;
-		} else {
-			return testCC(prefix.substring(3));
-		}
+		return prefix.equals("REP") || testCC(prefix.substring(3));
 	}
 	
 	@Override

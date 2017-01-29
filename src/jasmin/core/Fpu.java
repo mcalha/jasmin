@@ -1,6 +1,7 @@
 package jasmin.core;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 public class Fpu {
@@ -16,25 +17,25 @@ public class Fpu {
 	 */
 	private static String registersMatchingString = "((ST0)|(ST1)|(ST2)|(ST3)|(ST4)|(ST5)|(ST6)|(ST7))";
 	private static String qualifiersMatchingString = "((TO))";
-	public static final Pattern pRegisters = Pattern.compile(registersMatchingString);
-	public static final Pattern pQualifiers = Pattern.compile(qualifiersMatchingString);
+	public static Pattern pRegisters = Pattern.compile(registersMatchingString);
+	public static Pattern pQualifiers = Pattern.compile(qualifiersMatchingString);
 	
 	public boolean fC0, fC1, fC2, fC3, fStackFault, fPrecision, fUnderflow, fOverflow, fZeroDivide, fDenormalized, fInvalid;
 	
-	public static final byte TAGVALID = 0;
-	public static final byte TAGZERO = 1;
-	public static final byte TAGSPECIAL = 2;
-	public static final byte TAGEMPTY = 3;
+	public static byte TAGVALID = 0;
+	public static byte TAGZERO = 1;
+	public static byte TAGSPECIAL = 2;
+	public static byte TAGEMPTY = 3;
 	
-	public static final int FLOAT = 2003;
-	public static final int PACKEDBCD = 2002;
-	public static final int INTEGER = 2001;
-	public static final int NOFPUDATA = 0;
+	public static int FLOAT = 2003;
+	public static int PACKEDBCD = 2002;
+	public static int INTEGER = 2001;
+	public static int NOFPUDATA = 0;
 	
 	/**
 	 * by default, memory accesses operate on 8 bytes / 64 bit of data
 	 */
-	public static final int defaultOperandSize = 8;
+	public static int defaultOperandSize = 8;
 	
 	/**
 	 * default constructor. initializes internal variables.
@@ -45,7 +46,7 @@ public class Fpu {
 		for (int i = 0; i < numRegisters; i++) {
 			tags[i] = TAGEMPTY;
 		}
-		globalListeners = new LinkedList<IListener>();
+		globalListeners = new ArrayList<>();
 	}
 	
 	/**
@@ -299,7 +300,7 @@ public class Fpu {
 	}
 	
 	public int getAddress(String fpuregister) {
-		return Integer.parseInt(fpuregister.substring(2));
+		return Integer.valueOf(fpuregister.substring(2));
 	}
 	
 	public double get(int relativePosition) {
@@ -365,11 +366,7 @@ public class Fpu {
 	 */
 	public static boolean fitsInto(double d, int numberBytes) {
 		long l = ((Double) d).longValue();
-		if (Parser.getOperandSize(l) <= numberBytes) {
-			return true;
-		} else {
-			return false;
-		}
+		return Parser.getOperandSize(l) <= numberBytes;
 	}
 	
 	/**
@@ -426,17 +423,12 @@ public class Fpu {
 	public static boolean doubleIsDenormal(double d) {
 		long exp = doubleExponent(d);
 		long mant = doubleMantissa(d);
-		if ((exp == 0) && (mant != 0)) {
-			return true;
-		} else {
-			return false;
-		}
-		
+		return (exp == 0) && (mant != 0);
 	}
 	
 	// ////// LISTENER SUPPORT
 	
-	private LinkedList<IListener> globalListeners;
+	private List<IListener> globalListeners;
 	
 	public void addListener(IListener l) {
 		globalListeners.add(l);
@@ -452,42 +444,6 @@ public class Fpu {
 		for (IListener l : globalListeners) {
 			l.notifyChanged(address, newValue);
 		}
-	}
-	
-	/**
-	 * testing only
-	 * 
-	 * @param args
-	 *        arguments
-	 */
-	public static void main(String[] args) {
-		// for (String s : Op.humanNamesArray(Integer.parseInt("00000111111111111010111011101100", 2))) {
-		// System.out.println(s);
-		// }
-		System.out.println(Parser.hex2dec(Parser.unescape(Parser.escape("[0X100000]"))));
-		System.out.println(Parser.hex2dec("[0X100000]"));
-		System.out.println(Parser.hex2dec("[100000H]"));
-		/*double a = -0.0;
-		
-		System.out.println("double a: "+Long.toBinaryString(Double.doubleToRawLongBits(a)));
-		System.out.println("sign: "+doubleSign(a)+" exponent: "+doubleExponent(a)+" mantisse: "+doubleMantissa(a));
-		
-		System.out.println(doubleFromPackedBCD(packedBCDFromDouble(12345)));
-		System.out.println(doubleFromUnsignedByte(unsignedByteFromDouble(-12345.678)));
-		Fpu fpu = new Fpu();
-		fpu.push(1);
-		fpu.push(2);
-		fpu.push(3);
-		for (int i = 0; i<fpu.getNumRegisters(); i++) {
-			System.out.println(i+": "+fpu.getRegisterName(i)+" = "+fpu.getRegisterContent(i,10));
-		}
-		System.out.println(fpu.pop());
-		fpu.fZeroDivide = true;
-		fpu.fStackFault = true;
-		fpu.fC3 = true;
-		System.out.println("FPU top pointer: "+fpu.top);
-		fpu.putStatusWord(fpu.getStatusWord());
-		fpu.getStatusWord();*/
 	}
 	
 }
