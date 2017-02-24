@@ -25,6 +25,8 @@ public class CalculatedAddress {
 	public static final Pattern pBasePlusDisplacement = Pattern.compile(registersMatchingString + "\\+\\d+");
 	// base - displacement
 	public static final Pattern pBaseMinusDisplacement = Pattern.compile(registersMatchingString + "\\-\\d+");
+	// displacement + base
+	public static final Pattern pDisplacementPlusBase = Pattern.compile("\\d+\\+" + registersMatchingString);
 	// (index*scale)
 	public static final Pattern pIndexScale = Pattern.compile(registersMatchingString + "\\*\\d+");
 	// (index*scale) + displacement
@@ -33,6 +35,9 @@ public class CalculatedAddress {
 	// (index*scale) - displacement
 	public static final Pattern pIndexScaleMinusDisplacement = Pattern.compile(registersMatchingString
 		+ "\\*\\d+\\-\\d+");
+	// (scale*index) + displacement
+	public static final Pattern pScaleIndexPlusDisplacement = Pattern.compile("\\d+\\*" + registersMatchingString
+		+ "\\+\\d+");
 	// base + index + displacement
 	public static final Pattern pBaseIndexPlusDisplacement = Pattern.compile(registersMatchingString + "\\+"
 		+ registersMatchingString
@@ -187,6 +192,12 @@ public class CalculatedAddress {
 			displacement = -Integer.parseInt(s.substring(s.indexOf("-") + 1));
 			return null;
 		}
+		 // displacement + base //new combination
+                if (pDisplacementPlusBase.matcher(s).matches()) { 
+                        displacement = Integer.parseInt(s.substring(0, s.indexOf("+")));
+                        base = dsp.getRegisterArgument(s.substring(s.indexOf("+") + 1));
+			return null;
+                }
                 // displacement + constant
                 if(pAddressPlusConstant.matcher(s).matches()) {
                     int left = Integer.parseInt(s.substring(0, s.indexOf("+")));
@@ -217,6 +228,13 @@ public class CalculatedAddress {
 			index = dsp.getRegisterArgument(s.substring(0, s.indexOf("*")));
 			scale = Integer.parseInt(s.substring(s.indexOf("*") + 1, s.indexOf("-")));
 			displacement = -Integer.parseInt(s.substring(s.indexOf("-") + 1));
+			return null;
+		}
+		// (scale*index) + displacement // new combination
+		if (pScaleIndexPlusDisplacement.matcher(s).matches()) {
+                        scale = Integer.parseInt(s.substring(0, s.indexOf("*")));
+			index = dsp.getRegisterArgument(s.substring(s.indexOf("*") + 1, s.indexOf("+")));
+			displacement = Integer.parseInt(s.substring(s.indexOf("+") + 1));
 			return null;
 		}
 		// base + index
