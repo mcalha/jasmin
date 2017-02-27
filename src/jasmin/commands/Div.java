@@ -13,7 +13,7 @@ public class Div extends jasmin.core.JasminCommand {
 	
 	@Override
 	public ParseError validate(Parameters p) {
-		ParseError e = p.validate(0, Op.MEM | Op.REG | Op.IMM);
+		ParseError e = p.validate(0, Op.MEM | Op.REG);
 		if (e != null) {
 			return e;
 		}
