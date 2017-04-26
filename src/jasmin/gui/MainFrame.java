@@ -1203,15 +1203,15 @@ public class MainFrame extends javax.swing.JFrame {
      */
     private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton4ActionPerformed
         
-        JFrame frame = new JFrame("Command Line Parameters");
-        String input = JOptionPane.showInputDialog(frame, "What parameters would you like to pass?");
-        ArrayList<Integer> paraPorNaPilha = new ArrayList<Integer>();
+        //JFrame frame = new JFrame("Command Line Parameters");
+        //String input = JOptionPane.showInputDialog(frame, "What parameters would you like to pass?");
+        //ArrayList<Integer> paraPorNaPilha = new ArrayList<Integer>();
         
-        if (!input.equals("")) {
-            for (int i = 0; i < input.length(); i++) { //de 0 ate length
-                paraPorNaPilha.add((int) input.charAt(i));
-            }
-        }   
+        //if (!input.equals("")) {
+        //    for (int i = 0; i < input.length(); i++) { //de 0 ate length
+        //        paraPorNaPilha.add((int) input.charAt(i));
+        //    }
+        //}   
         
         //fica em "paraPorNaPilha" a sequencia de codigos ascii da command line
         //sendo os ultimos elementos os primeiros caracteres
