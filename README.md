@@ -17,6 +17,8 @@ Seguem-se uns screenshots para ajudar.
 
 [Step 3](https://i.imgsafe.org/e7c0fe94cc.png)
 
+##
+Vejam os commits da outra faculdade a partir de Jan 23 (até essa data foi tudo incluido)
 https://github.com/TUM-LRR/Jasmin/commits/master
 
 ##
