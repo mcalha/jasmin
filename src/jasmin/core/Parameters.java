@@ -34,7 +34,11 @@ public class Parameters {
 	private static FullArgument noArgument = new FullArgument("", "", 0, Op.NULL, -1, false, null);
 	
 	public FullArgument argument(int argumentIndex) {
-		return argumentIndex < numArguments ? argument[argumentIndex] : noArgument;
+		if (argumentIndex < numArguments) {
+			return argument[argumentIndex];
+		} else {
+			return noArgument;
+		}
 	}
 	
 	public ParseError consistentSizes() {
@@ -135,6 +139,7 @@ public class Parameters {
 	
 	public void put(Address a, long value, MemCellInfo memCellInfo) {
 		if (a.dynamic) {
+//System.out.println("Parameters - put(Address) - dsp.put");
 			dsp.put(value, a, memCellInfo);
 		}
 	}
@@ -142,8 +147,10 @@ public class Parameters {
 	public void put(int argumentIndex, long value, MemCellInfo memCellInfo) {
 		FullArgument arg = argument(argumentIndex);
 		if (arg.cAddress != null) {
+//System.out.println("Parameters - put(Index) Calculated address not null");
 			arg.address.address = arg.cAddress.calculateEffectiveAddress(true);
 		}
+//System.out.println("Parameters - put(Index) - ((arg:" + arg.arg + ",original:" + arg.original + ",startPos:" + arg.startPos + ",a.address:" + arg.address.address + ",a.value:" + arg.address.value + ",a.type:" + arg.address.type + ",a.datatype:" + arg.address.datatype + ",a.mask:" + String.format("0x%08X", arg.address.mask) + ")),value:" + value + ",memCellInfo:" + memCellInfo + ")");
 		put(arg.address, value, memCellInfo);
 	}
 	
@@ -182,27 +189,31 @@ public class Parameters {
 	
 	public void pop(Address a) {
 		long newESP = dsp.ESP.getShortcut() + a.size;
+//System.out.println("Parameters - pop(Address) - newESP:" + newESP + ",dsp.EBP.getShortcut():" + dsp.EBP.getShortcut());
+                // Block of code removed by: Mario Calha
+                // It doesn't make sense! Can't figure out in what situation this makes sense.
+                // Prevents the use of the EBP register in the context of a function
+/*                if (newESP > dsp.EBP.getShortcut()) {
+			dsp.setAddressOutOfRange();
+			return;
+		}*/
 		// get value from stack and write it to destination
 		Address stack = dsp.Stack(a.size);
 		dsp.put(dsp.getUpdate(stack, false), a, dsp.memInfo(stack));
 		// increase stack pointer
-		if (newESP > dsp.EBP.getShortcut()) {
-			dsp.setAddressOutOfRange();
-			return;
-		}
 		dsp.put(newESP, dsp.ESP, null);
 	}
 	
 	public long pop(int size) {
 		long newESP = dsp.ESP.getShortcut() + size;
+		if (newESP > dsp.EBP.getShortcut()) {
+			return 0;
+		}
 		// get current stack address
 		Address stack = dsp.Stack(size);
 		// increase stack pointer
 		dsp.put(newESP, dsp.ESP, null);
-		// get the value from the stack and return it
-		if (newESP > dsp.EBP.getShortcut()) {
-			return 0;
-		}
+		// get the value from the sack and return it
 		return dsp.getUpdate(stack, false);
 	}
 	
@@ -433,12 +444,14 @@ public class Parameters {
 		}
 	}
 
+	/**
+	 * Updates calculated addresses to account for dataspace changes.
+	 */
 	public void updateAdresses() {
- 		for (FullArgument arg : argument) {
- 			if (arg != null) {
- 				arg.calculateAddress(dsp);
- 			}
- 		}
- 	}
-	
+		for (FullArgument arg : argument) {
+			if (arg != null) {
+				arg.calculateAddress(dsp);
+			}
+		}
+	}
 }

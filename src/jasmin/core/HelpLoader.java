@@ -35,7 +35,7 @@ public class HelpLoader {
 	public HelpLoader(String language) {
 		System.out.println("HelpLoader loading...");
 		this.language = language;
-		this.helpcache = new Hashtable<>();
+		this.helpcache = new Hashtable<String, String>();
 		init();
 		System.out.println("... done\n");
 	}
@@ -57,7 +57,7 @@ public class HelpLoader {
 		}
 		helpcache.clear();
 		this.language = language;
-		this.helpcache = new Hashtable<>();
+		this.helpcache = new Hashtable<String, String>();
 		init();
 		System.out.println("... done\n");
 	}
@@ -77,7 +77,7 @@ public class HelpLoader {
 	 * @return if a context help exists for that mnemo
 	 */
 	public boolean exists(String mnemo) {
-		return helpcache.containsKey(mnemo.toLowerCase());
+		return helpcache.get(mnemo.toLowerCase()) != null;
 	}
 	
 	/**
@@ -86,7 +86,13 @@ public class HelpLoader {
 	 * @return a String array containing all mnemos for which help files exist
 	 */
 	public String[] getMnemoList() {
-		return helpcache.keySet().toArray(new String[helpcache.size()]);
+		Enumeration<String> enumeration = helpcache.keys();
+		String[] result = new String[helpcache.size()];
+		int i = 0;
+		while (enumeration.hasMoreElements()) {
+			result[i++] = enumeration.nextElement();
+		}
+		return result;
 	}
 	
 	/**
@@ -94,7 +100,7 @@ public class HelpLoader {
 	 */
 	private void init() {
 		URL home = getClass().getResource("..");
-		File local;
+		File local = null;
 		if (home != null) {
 			System.out.println("looks like you are not starting from a jar-package");
 			local = new File(home.getPath() + "/" + helproot + "/" + language + "/");
@@ -114,9 +120,10 @@ public class HelpLoader {
 			local = CommandLoader.getLocation();
 			initJar(local);
 		}
-		List<String> l = getLanguages();
-		for (String aL : l) {
-			System.out.println("language found: " + aL);
+		LinkedList<String> l = getLanguages();
+		Iterator<String> i = l.iterator();
+		while (i.hasNext()) {
+			System.out.println("language found: " + i.next());
 		}
 		
 	}
@@ -146,7 +153,7 @@ public class HelpLoader {
 		try {
 			System.out.println("+ " + String.valueOf(counter) + "\thelp text(s) from:\t"
 				+ local.getCanonicalPath());
-		} catch (IOException ignored) {
+		} catch (IOException e) {
 		}
 		
 	}
@@ -191,7 +198,8 @@ public class HelpLoader {
 				
 				System.out.println("+ " + String.valueOf(counter) + "\thelp text(s) from:\t"
 					+ file.getCanonicalPath());
-			} catch (IOException ignored) {
+			} catch (FileNotFoundException e) {
+			} catch (IOException e) {
 			}
 		}
 	}
@@ -212,13 +220,14 @@ public class HelpLoader {
 			while ((i = fis.read(buf)) != -1) {
 				text += new String(buf, 0, i);
 			}
-		} catch (IOException ignored) {
+		} catch (IOException e) {
 		}
 		helpcache.put(mnemo, text);
 	}
 	
 	private static String trimEntryName(JarEntry je) {
 		String[] s = je.getName().toLowerCase().replace(".htm", "").split("/");
+		;
 		return s[s.length - 1];
 	}
 	
@@ -230,7 +239,7 @@ public class HelpLoader {
 	 *        the name for the text file
 	 */
 	private void addToCache(File file, String mnemo) {
-		BufferedInputStream fis;
+		BufferedInputStream fis = null;
 		try {
 			fis = new BufferedInputStream(new FileInputStream(file));
 		} catch (FileNotFoundException e) {
@@ -245,7 +254,7 @@ public class HelpLoader {
 				text += new String(buf, 0, i);
 			}
 			fis.close();
-		} catch (IOException ignored) {
+		} catch (IOException e) {
 		}
 		helpcache.put(mnemo, text);
 	}
@@ -259,9 +268,8 @@ public class HelpLoader {
 	public void createHelpText(CommandLoader cl) {
 		File dir = new File((getClass().getResource("..").getPath()));
 		dir = new File(dir, language);
-		if (!dir.exists() && !dir.mkdirs()) {
-			System.out.println("Failed to create " + dir.getAbsolutePath());
-			return;
+		if (!dir.exists()) {
+			dir.mkdirs();
 		}
 		for (String mnemo : cl.getMnemoList()) {
 			if (!exists(mnemo)) {
@@ -288,16 +296,16 @@ public class HelpLoader {
 	}
 	
 	/**
-	 * adds to the list only if the String s has not alreay been added
+	 * adds to the LinkedList only if the String s has not alreay been added
 	 * 
 	 * @param paths
-	 *        the list to add to
+	 *        the LinkedList to add to
 	 * @param s
 	 *        the String to add
 	 */
-	public void addToList(List<String> paths, String s) {
-		for (String path : paths) {
-			if (path.equals(s)) {
+	public void addToList(LinkedList<String> paths, String s) {
+		for (int i = 0; i < paths.size(); i++) {
+			if (paths.get(i).equals(s)) {
 				return;
 			}
 		}
@@ -307,12 +315,12 @@ public class HelpLoader {
 	/**
 	 * scans for possible help directories (languages)
 	 * 
-	 * @return a list of possible language directories
+	 * @return a LinkedList of possible language directories
 	 */
-	public List<String> getLanguages() {
-		List<String> paths = new ArrayList<>();
+	public LinkedList<String> getLanguages() {
+		LinkedList<String> paths = new LinkedList<String>();
 		URL home = getClass().getResource("..");
-		File local;
+		File local = null;
 		if (home != null) {
 			System.out.println("looks like you are not starting from a jar-package");
 			try {
@@ -345,7 +353,7 @@ public class HelpLoader {
 					if (!jar.getCanonicalPath().equals(file.getCanonicalPath())) {
 						searchJarPath(file, paths);
 					}
-				} catch (IOException ignored) {
+				} catch (IOException e) {
 				}
 				searchJarPath(jar, paths);
 			}
@@ -360,18 +368,18 @@ public class HelpLoader {
 	 * @param file
 	 *        the jar file
 	 * @param paths
-	 *        the list to add to
+	 *        the LinkedList to add to
 	 * @param helproot
 	 *        the root directory of all help directories
 	 */
-	private void searchJarPath(File file, List<String> paths) {
+	private void searchJarPath(File file, LinkedList<String> paths) {
 		if (file.getName().toLowerCase().endsWith(".jar") && file.isFile()) {
 			try {
 				JarInputStream jis;
 				JarEntry je;
 				jis = new JarInputStream(new BufferedInputStream(new FileInputStream(file)));
 				je = jis.getNextJarEntry();
-
+				
 				while (je != null) {
 					if (je.getName().startsWith(helproot)) {
 						String[] name = je.getName().split("/");
@@ -382,8 +390,30 @@ public class HelpLoader {
 					je = jis.getNextJarEntry();
 				}
 				jis.close();
-			} catch (IOException ignored) {
+			} catch (FileNotFoundException e) {
+			} catch (IOException e) {
 			}
+		}
+	}
+	
+	/**
+	 * tests
+	 * 
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		
+		HelpLoader hl = new HelpLoader("help/en");
+		LinkedList<String> ll = hl.getLanguages();
+		for (int i = 0; i < ll.size(); i++) {
+			System.out.println(ll.get(i));
+			// Enumeration keys = hl.helpcache.keys();
+			// while (keys.hasMoreElements()) {
+			// String key = (String) keys.nextElement();
+			// System.out.println(key);
+			// System.out.println(hl.helpcache.get(key));
+			// }
+			// hl.createHelpText(new CommandLoader(new DataSpace(1),"jasmin.commands", JasminCommand.class));
 		}
 	}
 }

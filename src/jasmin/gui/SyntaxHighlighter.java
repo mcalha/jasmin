@@ -20,6 +20,7 @@ import javax.swing.text.*;
  */
 public class SyntaxHighlighter extends DefaultStyledDocument {
 	
+	private static final long serialVersionUID = 1L;
 	private JTextPane editor = null;
 	private JasDocument document = null;
 	private Style normal, command, register, error, label, comment, constant, variable;
@@ -45,12 +46,12 @@ public class SyntaxHighlighter extends DefaultStyledDocument {
 			"font.size", 12)));
 		initStyles();
 		
-		lineInfo = new ArrayList<>();
+		lineInfo = new ArrayList<LineInfo>();
 		lineInfo.add(new LineInfo());
-		labelDefinitions = new HashMap<>();
-		labelUses = new HashMap<>();
-		errorLines = new HashSet<>();
-		toDoList = new HashSet<>();
+		labelDefinitions = new HashMap<String, LineInfo>();
+		labelUses = new HashMap<String, HashSet<LineInfo>>();
+		errorLines = new HashSet<LineInfo>();
+		toDoList = new HashSet<LineInfo>();
 	}
 	
 	private void initStyles() {
@@ -260,28 +261,30 @@ public class SyntaxHighlighter extends DefaultStyledDocument {
 				labelUses.get(label).add(info);
 			}
 		}
-		if (prNew.label != null) {
+		// this "while" is just an "if" that is breakable :-)
+		while (prNew.label != null) {
 			// check for existing label
 			LineInfo existingDefinition = labelDefinitions.get(prNew.label);
 			if ((existingDefinition != null) && (existingDefinition != info)) {
 				prNew.error = new ParseError(prNew.originalLine, prNew.label, 0,
-						"Label already defined in line " + getLineNumberByLineInfo(existingDefinition));
-			} else {
-				// add label definition
-				labelDefinitions.put(prNew.label, info);
-				if (!labelUses.containsKey(prNew.label)) {
-					labelUses.put(prNew.label, new HashSet<LineInfo>());
-				}
-				int newLabelType = getLabelType(prNew.label);
-				if (newLabelType != oldLabelType) {
-					// mark lines with errors for re-parsing (maybe the new label solves an error)
-					toDoList.addAll(errorLines);
-				}
-				// If the label is a constant, re-parse all lines using it.
-				if (newLabelType == 3) {
-					toDoList.addAll(labelUses.get(prNew.label));
-				}
+					"Label already defined in line " + getLineNumberByLineInfo(existingDefinition));
+				break;
 			}
+			// add label definition
+			labelDefinitions.put(prNew.label, info);
+			if (!labelUses.containsKey(prNew.label)) {
+				labelUses.put(prNew.label, new HashSet<LineInfo>());
+			}
+			int newLabelType = getLabelType(prNew.label);
+			if (newLabelType != oldLabelType) {
+				// mark lines with errors for re-parsing (maybe the new label solves an error)
+				toDoList.addAll(errorLines);
+			}
+			// If the label is a constant, re-parse all lines using it.
+			if (newLabelType == 3) {
+				toDoList.addAll(labelUses.get(prNew.label));
+			}
+			break;
 		}
 		if (prNew.error != null) {
 			errorLines.add(info);
@@ -431,19 +434,15 @@ public class SyntaxHighlighter extends DefaultStyledDocument {
 		// highlight everything with default style
 		setCharacterAttributes(startOffset, length, normal, true);
 		
-		String lineWithoutCommand = line;
-		int startOffsetAfterCommand = startOffset;
 		// highlight commands
 		if (pr.mnemo != null) {
 			applyStyle(pr.mnemo, command, line, startOffset);
-			lineWithoutCommand = line.substring(pr.mnemo.length());
-			startOffsetAfterCommand += pr.mnemo.length();
 		}
 		
 		// highlight registers
 		String[] rlist = DataSpace.getRegisterList();
-		for (String aRlist : rlist) {
-			applyStyle(aRlist, register, line, startOffset);
+		for (int i = 0; i < rlist.length; i++) {
+			applyStyle(rlist[i], register, line, startOffset);
 		}
 		
 		// highlight labels, variables, constants
@@ -451,7 +450,7 @@ public class SyntaxHighlighter extends DefaultStyledDocument {
 			highlightLabel(pr.label, line, startOffset);
 		}
 		for (String labelstring : pr.usedLabels) {
-			highlightLabel(labelstring, lineWithoutCommand, startOffsetAfterCommand);
+			highlightLabel(labelstring, line, startOffset);
 		}
 		
 		// highlight errors
@@ -519,7 +518,7 @@ public class SyntaxHighlighter extends DefaultStyledDocument {
 	public String getTextToOffset(int startOffset, int endOffset) {
 		try {
 			return super.getText(startOffset, endOffset - startOffset);
-		} catch (BadLocationException ignored) {
+		} catch (BadLocationException e) {
 		}
 		return "";
 	}

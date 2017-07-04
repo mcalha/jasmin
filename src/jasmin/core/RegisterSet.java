@@ -30,6 +30,12 @@ public class RegisterSet {
 	 * the double word, for example EAX
 	 */
 	public static int E_X = 8;
+        
+        /**
+	 * the quad word, for example RAX
+	 */
+	public static int R__ = 16;
+        
 	
 	/**
 	 * String names
@@ -38,11 +44,12 @@ public class RegisterSet {
 	public String H = "";
 	public String E = "";
 	public String X = "";
+        public String R = "";
 	
 	/**
 	 * arguments to address the register parts directly
 	 */
-	public Address aL, aH, aE, aX;
+	public Address aL, aH, aE, aX, aR;
 	
 	/**
 	 * passes all the arguments into the datatype
@@ -64,16 +71,18 @@ public class RegisterSet {
 	 * @param strE
 	 *        name for the double word
 	 */
-	public RegisterSet(Address argL, Address argH, Address argX, Address argE, String strL, String strH,
-			String strX, String strE) {
+	public RegisterSet(Address argL, Address argH, Address argX, Address argE, Address argR, String strL, String strH,
+			String strX, String strE, String strR) {
 		aL = argL;
 		aH = argH;
 		aE = argE;
 		aX = argX;
+                aR = argR;
 		L = strL;
 		H = strH;
 		X = strX;
 		E = strE;
+                R = strR;
 	}
 	
 }

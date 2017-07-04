@@ -17,11 +17,15 @@ public class ParseResult {
 	public boolean labelOnly = false;
 	public String mnemo;
 	public int commentStartPos = -1;
-	public HashSet<String> usedLabels = new HashSet<>();
+	public HashSet<String> usedLabels;
 	
 	// executable objects that the Parser found
 	public JasminCommand command;
 	public Parameters param;
 	
 	public ParseError error;
+	
+	public ParseResult() {
+		usedLabels = new HashSet<String>();
+	}
 }

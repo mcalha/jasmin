@@ -20,7 +20,7 @@ import javax.swing.table.TableModel;
 public class MemoryTableModel implements TableModel {
 	
 	private DataSpace data = null;
-	private List<TableModelListener> listener = null;
+	private LinkedList<TableModelListener> listener = null;
 	
 	private boolean descending = false;
 	
@@ -33,10 +33,11 @@ public class MemoryTableModel implements TableModel {
 	/** Creates a new instance of MemoryTableModel */
 	public MemoryTableModel(DataSpace space, JasDocument doc) {
 		this.data = space;
-		listener = new ArrayList<TableModelListener>();
+		listener = new LinkedList<TableModelListener>();
 		this.doc = doc;
 		doHighlight = doc.isHighlightingEnabled();
 	}
+        
 	
 	public boolean isDescending() {
 		return descending;
@@ -139,13 +140,17 @@ public class MemoryTableModel implements TableModel {
 	}
 	
 	private void fireChangedEvent(int row) {
-		for (TableModelListener l : listener) {
+		Iterator<TableModelListener> iter = listener.iterator();
+		while (iter.hasNext()) {
+			TableModelListener l = iter.next();
 			l.tableChanged((new TableModelEvent(this, row)));
 		}
 	}
 	
 	private void fireChangedEvent() {
-		for (TableModelListener l : listener) {
+		Iterator<TableModelListener> iter = listener.iterator();
+		while (iter.hasNext()) {
+			TableModelListener l = iter.next();
 			l.tableChanged((new TableModelEvent(this)));
 		}
 	}
@@ -230,11 +235,12 @@ public class MemoryTableModel implements TableModel {
 		int index = getRowIndex(rowIndex) + data.getMemAddressStart();
 		switch (columnIndex) {
 		case 0:
-			if (doc.isMemAddressAsHex()) {
+			if (doc.isMemAddressAsHex(descending)) {
 				return "0x" + Integer.toHexString(index).toUpperCase();
 			} else {
 				return index + "";
 			}
+                        
 		case 1:
 			return data.getSignedMemory(index, mode) + "";
 		case 2:

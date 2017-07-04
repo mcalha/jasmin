@@ -13,7 +13,6 @@ import java.lang.Thread.State;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.List;
 import java.util.concurrent.Semaphore;
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
@@ -26,19 +25,21 @@ import javax.swing.undo.UndoManager;
  */
 public final class JasDocument extends javax.swing.JPanel {
 
-    private String title = "new document";
+    private static final long serialVersionUID = 1L;
+    private String title;
     /**
      * The line which is currently executed.
      */
     private volatile int markedLine = 0;
     private SyntaxHighlighter highlighter = null;
     private MemoryTableModel model = null;
-    private final List<IGuiModule> modules;
+    private final LinkedList<IGuiModule> modules;
     private IGuiModule lastSelected = null;
     public CommandLoader cmdLoader = null;
     public DataSpace data = null;
     public Parser parser = null;
-    private List<RegisterPanel> registerPanels = null;
+    private MemoryTableModel modelStack;
+    private LinkedList<RegisterPanel> registerPanels = null;
     private volatile ArrayList<LineNumber> lineNumbers = null;
     private volatile int lastHeight = 0;
     private volatile Semaphore lineNumbersUpdating;
@@ -59,10 +60,10 @@ public final class JasDocument extends javax.swing.JPanel {
     private HelpBrowser helpBrowser = null;
     private FpuPanel fpuPanel = null;
     private volatile Thread runningThread = null;
-    private volatile File snapshot = null;
+    private DataSpace snapshot = null;
     private volatile String lastPathCode = null;
     private volatile String lastPathMem = null;
-    
+
     public static final long TEMP_SAVE_INTERVAL = 3000; // ms
     private long lastTempSave = 0;
     private boolean savedOnce = false;
@@ -72,7 +73,8 @@ public final class JasDocument extends javax.swing.JPanel {
      *
      * @param label currently unused.
      */
-    public JasDocument(JLabel label, MainFrame frame) {
+    public JasDocument(JLabel label, MainFrame frame, int count) {
+        title = "new document " + count;
         this.frame = frame;
         initComponents();
 
@@ -102,12 +104,18 @@ public final class JasDocument extends javax.swing.JPanel {
         data.setParser(parser);
 
         model = new MemoryTableModel(data, this);
+        modelStack = new MemoryTableModel(data, this);
+        jSplitPane6.setTopComponent(null);
+        //Stack
+        modelStack.enableDescending(true);
         jTable1.setModel(model);
+        jTable2.setModel(modelStack);
         jTable1.setDefaultRenderer(String.class, new MemoryTableRenderer(model));
-        registerPanels = new ArrayList<RegisterPanel>();
-        RegisterSet[] regs = data.getRegisterSets();    
-        for (RegisterSet reg : regs) {
-            RegisterPanel gp = new RegisterPanel(reg, this);
+        jTable2.setDefaultRenderer(String.class, new MemoryTableRenderer(modelStack));
+        registerPanels = new LinkedList<RegisterPanel>();
+        RegisterSet[] regs = data.getRegisterSets();
+        for (int i = 0; i < regs.length; i++) {
+            RegisterPanel gp = new RegisterPanel(regs[i], this);
             jPanel3.add(gp);
             registerPanels.add(gp);
         }
@@ -118,10 +126,10 @@ public final class JasDocument extends javax.swing.JPanel {
         running = false;
 
         fpuPanel = new FpuPanel(data.fpu, this);
-        jPanel13.add(fpuPanel);
+        jPanel14.add(fpuPanel);
 
         // initialisation of GUI output modules. just add any new modules to this list:
-        modules = new ArrayList<IGuiModule>();
+        modules = new LinkedList<IGuiModule>();
 
         modules.add(new SevenSegment());
         modules.add(new StripLight());
@@ -157,7 +165,6 @@ public final class JasDocument extends javax.swing.JPanel {
                 frame.getProperty("split1.location", frame.getWidth() - 350 - jSplitPane2.getDividerLocation()));
         jSplitPane3.setDividerLocation(
                 frame.getProperty("split3.location", jSplitPane3.getDividerLocation()));
-        jSplitPane4.setDividerLocation(frame.getProperty("split4.location", frame.getHeight() - 350));
     }
 
     public boolean hasSnapshot() {
@@ -169,12 +176,9 @@ public final class JasDocument extends javax.swing.JPanel {
      */
     public void takeSnapshot() {
         try {
-            snapshot = File.createTempFile(this.hashCode() + "", null);
-            snapshot.deleteOnExit();
-            data.save(snapshot);
-
-        } catch (Exception ex) {
-            ex.printStackTrace();
+            snapshot = data.clone();
+        } catch (CloneNotSupportedException e) {
+            System.out.println(e.getMessage());
         }
     }
 
@@ -182,8 +186,9 @@ public final class JasDocument extends javax.swing.JPanel {
      * Loads the snapshot from the temp file.
      */
     public void resumeSnapshot() {
-        data.load(snapshot);
+        data.updateForCopy(snapshot);
         updateAll();
+        
     }
 
     private void checkButtonStates() {
@@ -560,7 +565,10 @@ public final class JasDocument extends javax.swing.JPanel {
     }
 
     private boolean isBreakPoint(int lineNumber) {
-        return lineNumber < lineNumbers.size() && lineNumbers.get(lineNumber).isBreakPoint();
+        if (lineNumber >= lineNumbers.size()) {
+            return false;
+        }
+        return lineNumbers.get(lineNumber).isBreakPoint();
     }
 
     /**
@@ -568,21 +576,19 @@ public final class JasDocument extends javax.swing.JPanel {
      */
     public void updateAll() {
         updateExecutionMark();
+        modelStack.updateChanged();
         model.updateChanged();
-
-        for (RegisterPanel rp : registerPanels) {
-
+        Iterator<RegisterPanel> iter = registerPanels.iterator();
+        while (iter.hasNext()) {
+            RegisterPanel rp = iter.next();
             rp.update();
         }
         for (IGuiModule mod : modules) {
             mod.updateAll();
         }
         jCheckCarry.setSelected(data.fCarry);
-        jCheckAuxiliary.setSelected(data.fAuxiliary);
         jCheckZero.setSelected(data.fZero);
         jCheckSign.setSelected(data.fSign);
-        jCheckDirection.setSelected(data.fDirection);
-        jCheckTrap.setSelected(data.fTrap);
         jCheckParity.setSelected(data.fParity);
         jCheckOverflow.setSelected(data.fOverflow);
         fpuPanel.update();
@@ -594,29 +600,39 @@ public final class JasDocument extends javax.swing.JPanel {
      * to
      */
     public void updateMemoryHighlight(boolean highlight) {
-        for (RegisterPanel rp : registerPanels) {
+        Iterator<RegisterPanel> iter = registerPanels.iterator();
+        while (iter.hasNext()) {
+            RegisterPanel rp = iter.next();
             rp.setHighlight(highlight);
             rp.update();
         }
         model.enableHighlighting(highlight);
+        modelStack.enableHighlighting(highlight);
+
     }
 
     public boolean isHighlightingEnabled() {
         return toggleButtonHighlight.isSelected();
     }
 
+    //highlight colors
     public Color getRegisterColor(Address register) {
         if (register == data.EAX) {
             return new Color(255, 200, 190);
-        } else if (register == data.EBX) {
+        }
+        if (register == data.EBX) {
             return new Color(250, 250, 200);
-        } else if (register == data.ECX) {
-            return new Color(200, 240, 200);
-        } else if (register == data.EDX) {
+        }
+        if (register == data.ECX) {
+            return new Color(153, 255, 255);
+        }
+        if (register == data.EDX) {
             return new Color(200, 200, 240);
-        } else if (register == data.ESI) {
+        }
+        if (register == data.ESI) {
             return new Color(250, 230, 180);
-        } else if (register == data.EDI) {
+        }
+        if (register == data.EDI) {
             return new Color(240, 200, 240);
         }
         return null;
@@ -640,21 +656,23 @@ public final class JasDocument extends javax.swing.JPanel {
     }
 
     private void setRegisterMode(int mode) {
-        for (RegisterPanel rp : registerPanels) {
+        Iterator<RegisterPanel> iter = registerPanels.iterator();
+        while (iter.hasNext()) {
+            RegisterPanel rp = iter.next();
             rp.setMode(mode);
         }
-        jToggleButton5.setSelected(false);
-        jToggleButton6.setSelected(false);
-        jToggleButton7.setSelected(false);
-        jToggleButton8.setSelected(false);
+        jToggleButton9.setSelected(false);
+        jToggleButton10.setSelected(false);
+        jToggleButton11.setSelected(false);
+        jToggleButton12.setSelected(false);
         if (mode == DataSpace.BIN) {
-            jToggleButton6.setSelected(true);
+            jToggleButton9.setSelected(true);
         } else if (mode == DataSpace.UNSIGNED) {
-            jToggleButton7.setSelected(true);
+            jToggleButton11.setSelected(true);
         } else if (mode == DataSpace.HEX) {
-            jToggleButton5.setSelected(true);
+            jToggleButton12.setSelected(true);
         } else if (mode == DataSpace.SIGNED) {
-            jToggleButton8.setSelected(true);
+            jToggleButton10.setSelected(true);
         }
     }
 
@@ -673,10 +691,22 @@ public final class JasDocument extends javax.swing.JPanel {
      * Executes the current line without modifying the EIP register.
      */
     public void executeCurrentLine() {
+        //corrige erro do botao current
+        tempSave();
+        int lineNumber = data.getInstructionPointer();
+        data.setInstructionPointer(lineNumber);
+        if (lineNumber < highlighter.getNumberOfLines()) {
+            executeLineNumber(lineNumber, false);
+        }
+        updateAll();
+        scrollToExecutionMark();
+
+        /*
         tempSave();
         executeLineNumber(highlighter.getLineNumberByOffset(getEditor().getCaretPosition()), false);
         scrollToExecutionMark();
         updateAll();
+         */
     }
 
     /**
@@ -703,562 +733,771 @@ public final class JasDocument extends javax.swing.JPanel {
      * WARNING: Do NOT modify this code. The content of this method is always
      * regenerated by the Form Editor.
      */
-	// <editor-fold defaultstate="collapsed"
-	// <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
-	private void initComponents() {
-		
-		jPopupMenu1 = new javax.swing.JPopupMenu();
-		jMenuItem11 = new javax.swing.JMenuItem();
-		jMenuItem12 = new javax.swing.JMenuItem();
-		jSeparator1 = new javax.swing.JSeparator();
-		jMenuItem8 = new javax.swing.JMenuItem();
-		jMenuItem9 = new javax.swing.JMenuItem();
-		jMenuItem10 = new javax.swing.JMenuItem();
-		jSplitPane2 = new javax.swing.JSplitPane();
-		jSplitPane1 = new javax.swing.JSplitPane();
-		jPanel1 = new javax.swing.JPanel();
-		jPanel6 = new javax.swing.JPanel();
-		jScrollPane2 = new javax.swing.JScrollPane();
-		jTable1 = new javax.swing.JTable();
-		jToolBar1 = new javax.swing.JToolBar();
-		toggleButtonDesc = new javax.swing.JToggleButton();
-		toggleButtonHex = new javax.swing.JToggleButton();
-		toggleButtonHighlight = new javax.swing.JToggleButton();
-		jPanel9 = new javax.swing.JPanel();
-		toggleButton8Bit = new javax.swing.JToggleButton();
-		toggleButton16Bit = new javax.swing.JToggleButton();
-		toggleButton32Bit = new javax.swing.JToggleButton();
-		jSplitPane4 = new javax.swing.JSplitPane();
-		jPanel4 = new javax.swing.JPanel();
-		jPanel7 = new javax.swing.JPanel();
-		ErrorLabel = new javax.swing.JLabel();
-		jScrollPane1 = new javax.swing.JScrollPane();
-		jPanel2 = new javax.swing.JPanel();
-		NumberPanel = new javax.swing.JPanel();
-		jTextPane1 = new javax.swing.JTextPane();
-		jTabbedPane1 = new javax.swing.JTabbedPane();
-		jPanelHelp = new javax.swing.JPanel();
-		jSplitPane3 = new javax.swing.JSplitPane();
-		jPanel8 = new javax.swing.JPanel();
-		jPanel5 = new javax.swing.JPanel();
-		jCheckCarry = new javax.swing.JCheckBox();
-		jCheckOverflow = new javax.swing.JCheckBox();
-		jCheckSign = new javax.swing.JCheckBox();
-		jCheckZero = new javax.swing.JCheckBox();
-		jCheckParity = new javax.swing.JCheckBox();
-		jCheckAuxiliary = new javax.swing.JCheckBox();
-		jCheckTrap = new javax.swing.JCheckBox();
-		jCheckDirection = new javax.swing.JCheckBox();
-		jPanel10 = new javax.swing.JPanel();
-		jToolBar2 = new javax.swing.JToolBar();
-		jToggleButton6 = new javax.swing.JToggleButton();
-		jToggleButton8 = new javax.swing.JToggleButton();
-		jToggleButton7 = new javax.swing.JToggleButton();
-		jToggleButton5 = new javax.swing.JToggleButton();
-		jPanel3 = new javax.swing.JPanel();
-		jPanel13 = new javax.swing.JPanel();
-		
-		jMenuItem11.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-			"/jasmin/gui/resources/icons/undo.png"))); // NOI18N
-		jMenuItem11.setMnemonic('u');
-		jMenuItem11.setText("Undo");
-		jMenuItem11.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jMenuItem11ActionPerformed(evt);
-			}
-		});
-		jPopupMenu1.add(jMenuItem11);
-		
-		jMenuItem12.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-			"/jasmin/gui/resources/icons/redo.png"))); // NOI18N
-		jMenuItem12.setMnemonic('r');
-		jMenuItem12.setText("Redo");
-		jMenuItem12.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jMenuItem12ActionPerformed(evt);
-			}
-		});
-		jPopupMenu1.add(jMenuItem12);
-		jPopupMenu1.add(jSeparator1);
-		
-		jMenuItem8.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-			"/jasmin/gui/resources/icons/editcut.png"))); // NOI18N
-		jMenuItem8.setMnemonic('t');
-		jMenuItem8.setText("Cut");
-		jMenuItem8.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jMenuItem8ActionPerformed(evt);
-			}
-		});
-		jPopupMenu1.add(jMenuItem8);
-		
-		jMenuItem9.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-			"/jasmin/gui/resources/icons/editcopy.png"))); // NOI18N
-		jMenuItem9.setMnemonic('c');
-		jMenuItem9.setText("Copy");
-		jMenuItem9.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jMenuItem9ActionPerformed(evt);
-			}
-		});
-		jPopupMenu1.add(jMenuItem9);
-		
-		jMenuItem10.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-			"/jasmin/gui/resources/icons/editpaste.png"))); // NOI18N
-		jMenuItem10.setMnemonic('p');
-		jMenuItem10.setText("Paste");
-		jMenuItem10.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jMenuItem10ActionPerformed(evt);
-			}
-		});
-		jPopupMenu1.add(jMenuItem10);
-		
-		setLayout(new java.awt.BorderLayout());
-		
-		jSplitPane2.setBorder(null);
-		jSplitPane2.setDividerLocation(300);
-		jSplitPane2.setDividerSize(3);
-		jSplitPane2.setContinuousLayout(true);
-		
-		jSplitPane1.setBorder(null);
-		jSplitPane1.setDividerLocation(600);
-		jSplitPane1.setDividerSize(3);
-		jSplitPane1.setContinuousLayout(true);
-		jSplitPane1.addMouseListener(new java.awt.event.MouseAdapter() {
-			
-			@Override
-			public void mouseClicked(java.awt.event.MouseEvent evt) {
-				jSplitPane1MouseClicked(evt);
-			}
-			
-			@Override
-			public void mouseReleased(java.awt.event.MouseEvent evt) {
-				jSplitPane1MouseReleased(evt);
-			}
-		});
-		jSplitPane1.addComponentListener(new java.awt.event.ComponentAdapter() {
-			
-			@Override
-			public void componentMoved(java.awt.event.ComponentEvent evt) {
-				jSplitPane1ComponentMoved(evt);
-			}
-			
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent evt) {
-				jSplitPane1ComponentResized(evt);
-			}
-		});
-		jSplitPane1.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
-			
-			@Override
-			public void mouseDragged(java.awt.event.MouseEvent evt) {
-				jSplitPane1MouseDragged(evt);
-			}
-		});
-		jSplitPane1.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
-			
-			public void propertyChange(java.beans.PropertyChangeEvent evt) {
-				jSplitPane1PropertyChange(evt);
-			}
-		});
-		
-		jPanel1.addComponentListener(new java.awt.event.ComponentAdapter() {
-			
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent evt) {
-				jPanel1ComponentResized(evt);
-			}
-		});
-		jPanel1.setLayout(new java.awt.BorderLayout());
-		
-		jPanel6.setBorder(javax.swing.BorderFactory.createTitledBorder("Memory"));
-		jPanel6.setLayout(new java.awt.BorderLayout());
-		
-		jScrollPane2.setBorder(null);
-		
-		jTable1.setModel(new javax.swing.table.DefaultTableModel(new Object[][] { { null, null, null, null },
-			{ null, null, null, null }, { null, null, null, null }, { null, null, null, null } },
-			new String[] { "Title 1",
-				"Title 2", "Title 3", "Title 4" }));
-		jScrollPane2.setViewportView(jTable1);
-		
-		jPanel6.add(jScrollPane2, java.awt.BorderLayout.CENTER);
-		
-		toggleButtonDesc.setText("desc");
-		toggleButtonDesc.setToolTipText("Show cells in descending order");
-		toggleButtonDesc.setBorderPainted(false);
-		toggleButtonDesc.setOpaque(false);
-		toggleButtonDesc.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButtonDescActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButtonDesc);
-		
-		toggleButtonHex.setSelected(true);
-		toggleButtonHex.setText("hex");
-		toggleButtonHex.setToolTipText("Show addresses as hex numbers");
-		toggleButtonHex.setBorderPainted(false);
-		toggleButtonHex.setOpaque(false);
-		toggleButtonHex.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButtonHexActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButtonHex);
-		
-		toggleButtonHighlight.setText("highlight");
-		toggleButtonHighlight.setToolTipText("Highlight cells that registers are pointing to");
-		toggleButtonHighlight.setBorderPainted(false);
-		toggleButtonHighlight.setOpaque(false);
-		toggleButtonHighlight.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButtonHighlightActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButtonHighlight);
-		
-		jPanel9.setOpaque(false);
-		jToolBar1.add(jPanel9);
-		
-		toggleButton8Bit.setText("8 Bit");
-		toggleButton8Bit.setBorderPainted(false);
-		toggleButton8Bit.setOpaque(false);
-		toggleButton8Bit.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButton8BitActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButton8Bit);
-		
-		toggleButton16Bit.setText("16Bit");
-		toggleButton16Bit.setBorderPainted(false);
-		toggleButton16Bit.setOpaque(false);
-		toggleButton16Bit.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButton16BitActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButton16Bit);
-		
-		toggleButton32Bit.setSelected(true);
-		toggleButton32Bit.setText("32Bit");
-		toggleButton32Bit.setBorderPainted(false);
-		toggleButton32Bit.setOpaque(false);
-		toggleButton32Bit.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				toggleButton32BitActionPerformed(evt);
-			}
-		});
-		jToolBar1.add(toggleButton32Bit);
-		
-		jPanel6.add(jToolBar1, java.awt.BorderLayout.NORTH);
-		
-		jPanel1.add(jPanel6, java.awt.BorderLayout.CENTER);
-		
-		jSplitPane1.setRightComponent(jPanel1);
-		
-		jSplitPane4.setBorder(null);
-		jSplitPane4.setDividerLocation(700);
-		jSplitPane4.setDividerSize(3);
-		jSplitPane4.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
-		jSplitPane4.setContinuousLayout(true);
-		
-		jPanel4.setLayout(new java.awt.BorderLayout());
-		
-		jPanel7.setLayout(new java.awt.BorderLayout());
-		
-		ErrorLabel.setForeground(new java.awt.Color(255, 0, 0));
-		jPanel7.add(ErrorLabel, java.awt.BorderLayout.CENTER);
-		
-		jPanel4.add(jPanel7, java.awt.BorderLayout.SOUTH);
-		
-		jScrollPane1.setBorder(null);
-		
-		jPanel2.setLayout(new java.awt.BorderLayout());
-		
-		NumberPanel.setPreferredSize(new java.awt.Dimension(40, 100));
-		NumberPanel.addComponentListener(new java.awt.event.ComponentAdapter() {
-			
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent evt) {
-				NumberPanelComponentResized(evt);
-			}
-		});
-		NumberPanel.setLayout(null);
-		jPanel2.add(NumberPanel, java.awt.BorderLayout.WEST);
-		
-		jTextPane1.setBorder(null);
-		jTextPane1.addMouseListener(new java.awt.event.MouseAdapter() {
-			
-			@Override
-			public void mouseClicked(java.awt.event.MouseEvent evt) {
-				jTextPane1MouseClicked(evt);
-			}
-		});
-		jTextPane1.addCaretListener(new javax.swing.event.CaretListener() {
-			
-			public void caretUpdate(javax.swing.event.CaretEvent evt) {
-				jTextPane1CaretUpdate(evt);
-			}
-		});
-		jTextPane1.addInputMethodListener(new java.awt.event.InputMethodListener() {
-			
-			/**
-			 * @param evt
-			 *        the Event that triggered this action
-			 */
-			public void caretPositionChanged(java.awt.event.InputMethodEvent evt) {
-			}
-			
-			public void inputMethodTextChanged(java.awt.event.InputMethodEvent evt) {
-				jTextPane1InputMethodTextChanged(evt);
-			}
-		});
-		jTextPane1.addKeyListener(new java.awt.event.KeyAdapter() {
-			
-			@Override
-			public void keyPressed(java.awt.event.KeyEvent evt) {
-				jTextPane1KeyPressed(evt);
-			}
-			
-			@Override
-			public void keyReleased(java.awt.event.KeyEvent evt) {
-				jTextPane1KeyReleased(evt);
-			}
-			
-			@Override
-			public void keyTyped(java.awt.event.KeyEvent evt) {
-				jTextPane1KeyTyped(evt);
-			}
-		});
-		jPanel2.add(jTextPane1, java.awt.BorderLayout.CENTER);
-		
-		jScrollPane1.setViewportView(jPanel2);
-		
-		jPanel4.add(jScrollPane1, java.awt.BorderLayout.CENTER);
-		
-		jSplitPane4.setLeftComponent(jPanel4);
-		
-		jTabbedPane1.setTabPlacement(SwingConstants.LEFT);
-		jTabbedPane1.addChangeListener(new javax.swing.event.ChangeListener() {
-			
-			public void stateChanged(javax.swing.event.ChangeEvent evt) {
-				jTabbedPane1StateChanged(evt);
-			}
-		});
-		
-		jPanelHelp.addComponentListener(new java.awt.event.ComponentAdapter() {
-			
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent evt) {
-				jPanelHelpComponentResized(evt);
-			}
-		});
-		jPanelHelp.setLayout(new java.awt.BorderLayout());
-		jTabbedPane1.addTab("Help", jPanelHelp);
-		
-		jSplitPane4.setRightComponent(jTabbedPane1);
-		
-		jSplitPane1.setLeftComponent(jSplitPane4);
-		
-		jSplitPane2.setRightComponent(jSplitPane1);
-		
-		jSplitPane3.setBorder(null);
-		jSplitPane3.setDividerSize(3);
-		jSplitPane3.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
-		
-		jPanel8.setBorder(javax.swing.BorderFactory.createTitledBorder("Registers"));
-		jPanel8.addComponentListener(new java.awt.event.ComponentAdapter() {
-			
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent evt) {
-				jPanel8ComponentResized(evt);
-			}
-		});
-		jPanel8.setLayout(new java.awt.BorderLayout());
-		
-		jPanel5.setLayout(new java.awt.GridLayout(4, 2));
-		
-		jCheckCarry.setText("Carry");
-		jCheckCarry.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckCarry.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckCarry.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckCarryActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckCarry);
-		
-		jCheckOverflow.setText("Overflow");
-		jCheckOverflow.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckOverflow.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckOverflow.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckOverflowActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckOverflow);
-		
-		jCheckSign.setText("Sign");
-		jCheckSign.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckSign.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckSign.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckSignActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckSign);
-		
-		jCheckZero.setText("Zero");
-		jCheckZero.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckZero.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckZero.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckZeroActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckZero);
-		
-		jCheckParity.setText("Parity");
-		jCheckParity.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckParity.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckParity.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckParityActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckParity);
-		
-		jCheckAuxiliary.setText("Auxiliary");
-		jCheckAuxiliary.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckAuxiliary.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckAuxiliary.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckAuxiliaryActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckAuxiliary);
-		
-		jCheckTrap.setText("Trap");
-		jCheckTrap.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckTrap.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckTrap.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckTrapActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckTrap);
-		
-		jCheckDirection.setText("Direction");
-		jCheckDirection.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		jCheckDirection.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		jCheckDirection.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jCheckDirectionActionPerformed(evt);
-			}
-		});
-		jPanel5.add(jCheckDirection);
-		
-		jPanel8.add(jPanel5, java.awt.BorderLayout.SOUTH);
-		
-		jPanel10.setLayout(new java.awt.BorderLayout());
-		
-		jToolBar2.setRollover(true);
-		
-		jToggleButton6.setText("bin");
-		jToggleButton6.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-		jToggleButton6.setMaximumSize(new java.awt.Dimension(45, 27));
-		jToggleButton6.setMinimumSize(new java.awt.Dimension(45, 27));
-		jToggleButton6.setOpaque(false);
-		jToggleButton6.setPreferredSize(new java.awt.Dimension(45, 27));
-		jToggleButton6.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jToggleButton6ActionPerformed(evt);
-			}
-		});
-		jToolBar2.add(jToggleButton6);
-		
-		jToggleButton8.setSelected(true);
-		jToggleButton8.setText("±dec");
-		jToggleButton8.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-		jToggleButton8.setMaximumSize(new java.awt.Dimension(45, 27));
-		jToggleButton8.setMinimumSize(new java.awt.Dimension(45, 27));
-		jToggleButton8.setOpaque(false);
-		jToggleButton8.setPreferredSize(new java.awt.Dimension(45, 27));
-		jToggleButton8.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jToggleButton8ActionPerformed(evt);
-			}
-		});
-		jToolBar2.add(jToggleButton8);
-		
-		jToggleButton7.setText("dec");
-		jToggleButton7.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-		jToggleButton7.setMaximumSize(new java.awt.Dimension(45, 27));
-		jToggleButton7.setMinimumSize(new java.awt.Dimension(45, 27));
-		jToggleButton7.setOpaque(false);
-		jToggleButton7.setPreferredSize(new java.awt.Dimension(45, 27));
-		jToggleButton7.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jToggleButton7ActionPerformed(evt);
-			}
-		});
-		jToolBar2.add(jToggleButton7);
-		
-		jToggleButton5.setText("hex");
-		jToggleButton5.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-		jToggleButton5.setMaximumSize(new java.awt.Dimension(45, 27));
-		jToggleButton5.setMinimumSize(new java.awt.Dimension(45, 27));
-		jToggleButton5.setOpaque(false);
-		jToggleButton5.setPreferredSize(new java.awt.Dimension(45, 27));
-		jToggleButton5.addActionListener(new java.awt.event.ActionListener() {
-			
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				jToggleButton5ActionPerformed(evt);
-			}
-		});
-		jToolBar2.add(jToggleButton5);
-		
-		jPanel10.add(jToolBar2, java.awt.BorderLayout.NORTH);
-		
-		jPanel3.setLayout(new javax.swing.BoxLayout(jPanel3, javax.swing.BoxLayout.Y_AXIS));
-		jPanel10.add(jPanel3, java.awt.BorderLayout.CENTER);
-		
-		jPanel8.add(jPanel10, java.awt.BorderLayout.NORTH);
-		
-		jSplitPane3.setTopComponent(jPanel8);
-		
-		jPanel13.setLayout(new java.awt.BorderLayout());
-		jSplitPane3.setBottomComponent(jPanel13);
-		
-		jSplitPane2.setLeftComponent(jSplitPane3);
-		
-		add(jSplitPane2, java.awt.BorderLayout.CENTER);
-	}// </editor-fold>//GEN-END:initComponents
+    // <editor-fold defaultstate="collapsed"
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
+
+        jPopupMenu1 = new javax.swing.JPopupMenu();
+        jMenuItem11 = new javax.swing.JMenuItem();
+        jMenuItem12 = new javax.swing.JMenuItem();
+        jSeparator1 = new javax.swing.JSeparator();
+        jMenuItem8 = new javax.swing.JMenuItem();
+        jMenuItem9 = new javax.swing.JMenuItem();
+        jMenuItem10 = new javax.swing.JMenuItem();
+        jSplitPane2 = new javax.swing.JSplitPane();
+        jSplitPane1 = new javax.swing.JSplitPane();
+        jPanel1 = new javax.swing.JPanel();
+        jSplitPane6 = new javax.swing.JSplitPane();
+        jPanel11 = new javax.swing.JPanel();
+        jScrollPane4 = new javax.swing.JScrollPane();
+        jTable2 = new javax.swing.JTable();
+        jToolBar6 = new javax.swing.JToolBar();
+        buttonDesc1 = new javax.swing.JButton();
+        buttonHex1 = new javax.swing.JButton();
+        jPanel12 = new javax.swing.JPanel();
+        toggleButton8Bit1 = new javax.swing.JToggleButton();
+        toggleButton16Bit1 = new javax.swing.JToggleButton();
+        toggleButton32Bit1 = new javax.swing.JToggleButton();
+        jPanel6 = new javax.swing.JPanel();
+        jScrollPane2 = new javax.swing.JScrollPane();
+        jTable1 = new javax.swing.JTable();
+        jToolBar1 = new javax.swing.JToolBar();
+        buttonDesc = new javax.swing.JButton();
+        buttonHex = new javax.swing.JButton();
+        toggleButtonHighlight = new javax.swing.JToggleButton();
+        jPanel9 = new javax.swing.JPanel();
+        toggleButton8Bit = new javax.swing.JToggleButton();
+        toggleButton16Bit = new javax.swing.JToggleButton();
+        toggleButton32Bit = new javax.swing.JToggleButton();
+        jSplitPane4 = new javax.swing.JSplitPane();
+        jPanel4 = new javax.swing.JPanel();
+        jPanel7 = new javax.swing.JPanel();
+        ErrorLabel = new javax.swing.JLabel();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        jPanel2 = new javax.swing.JPanel();
+        NumberPanel = new javax.swing.JPanel();
+        jTextPane1 = new javax.swing.JTextPane();
+        jTabbedPane1 = new javax.swing.JTabbedPane();
+        jPanelHelp = new javax.swing.JPanel();
+        jSplitPane3 = new javax.swing.JSplitPane();
+        jTabbedPane3 = new javax.swing.JTabbedPane();
+        jToolBar5 = new javax.swing.JToolBar();
+        filler6 = new javax.swing.Box.Filler(new java.awt.Dimension(0, 10), new java.awt.Dimension(0, 10), new java.awt.Dimension(32767, 100));
+        jToolBar3 = new javax.swing.JToolBar();
+        jToggleButton9 = new javax.swing.JToggleButton();
+        jToggleButton10 = new javax.swing.JToggleButton();
+        jToggleButton11 = new javax.swing.JToggleButton();
+        jToggleButton12 = new javax.swing.JToggleButton();
+        filler5 = new javax.swing.Box.Filler(new java.awt.Dimension(0, 10), new java.awt.Dimension(0, 10), new java.awt.Dimension(32767, 100));
+        jPanel5 = new javax.swing.JPanel();
+        jCheckCarry = new javax.swing.JCheckBox();
+        jCheckOverflow = new javax.swing.JCheckBox();
+        jCheckSign = new javax.swing.JCheckBox();
+        jCheckParity = new javax.swing.JCheckBox();
+        jCheckZero = new javax.swing.JCheckBox();
+        jScrollPane3 = new javax.swing.JScrollPane();
+        jPanel8 = new javax.swing.JPanel();
+        jPanel10 = new javax.swing.JPanel();
+        jToolBar2 = new javax.swing.JToolBar();
+        jPanel3 = new javax.swing.JPanel();
+        jToolBar4 = new javax.swing.JToolBar();
+        filler7 = new javax.swing.Box.Filler(new java.awt.Dimension(0, 10), new java.awt.Dimension(0, 10), new java.awt.Dimension(32767, 100));
+        jPanel14 = new javax.swing.JPanel();
+
+        jMenuItem11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/undo.png"))); // NOI18N
+        jMenuItem11.setMnemonic('u');
+        jMenuItem11.setText("Undo");
+        jMenuItem11.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem11ActionPerformed(evt);
+            }
+        });
+        jPopupMenu1.add(jMenuItem11);
+
+        jMenuItem12.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/redo.png"))); // NOI18N
+        jMenuItem12.setMnemonic('r');
+        jMenuItem12.setText("Redo");
+        jMenuItem12.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem12ActionPerformed(evt);
+            }
+        });
+        jPopupMenu1.add(jMenuItem12);
+        jPopupMenu1.add(jSeparator1);
+
+        jMenuItem8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcut.png"))); // NOI18N
+        jMenuItem8.setMnemonic('t');
+        jMenuItem8.setText("Cut");
+        jMenuItem8.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem8ActionPerformed(evt);
+            }
+        });
+        jPopupMenu1.add(jMenuItem8);
+
+        jMenuItem9.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcopy.png"))); // NOI18N
+        jMenuItem9.setMnemonic('c');
+        jMenuItem9.setText("Copy");
+        jMenuItem9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem9ActionPerformed(evt);
+            }
+        });
+        jPopupMenu1.add(jMenuItem9);
+
+        jMenuItem10.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editpaste.png"))); // NOI18N
+        jMenuItem10.setMnemonic('p');
+        jMenuItem10.setText("Paste");
+        jMenuItem10.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem10ActionPerformed(evt);
+            }
+        });
+        jPopupMenu1.add(jMenuItem10);
+
+        setLayout(new java.awt.BorderLayout());
+
+        jSplitPane2.setBorder(null);
+        jSplitPane2.setDividerLocation(300);
+        jSplitPane2.setDividerSize(3);
+        jSplitPane2.setContinuousLayout(true);
+
+        jSplitPane1.setBorder(null);
+        jSplitPane1.setDividerLocation(600);
+        jSplitPane1.setDividerSize(3);
+        jSplitPane1.setContinuousLayout(true);
+        jSplitPane1.setPreferredSize(new java.awt.Dimension(350, 500));
+        jSplitPane1.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                jSplitPane1MouseClicked(evt);
+            }
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                jSplitPane1MouseReleased(evt);
+            }
+        });
+        jSplitPane1.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentMoved(java.awt.event.ComponentEvent evt) {
+                jSplitPane1ComponentMoved(evt);
+            }
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                jSplitPane1ComponentResized(evt);
+            }
+        });
+        jSplitPane1.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
+            public void mouseDragged(java.awt.event.MouseEvent evt) {
+                jSplitPane1MouseDragged(evt);
+            }
+        });
+        jSplitPane1.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+            public void propertyChange(java.beans.PropertyChangeEvent evt) {
+                jSplitPane1PropertyChange(evt);
+            }
+        });
+
+        jPanel1.setMaximumSize(new java.awt.Dimension(500, 900));
+        jPanel1.setMinimumSize(new java.awt.Dimension(300, 500));
+        jPanel1.setPreferredSize(new java.awt.Dimension(300, 500));
+        jPanel1.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                jPanel1ComponentResized(evt);
+            }
+        });
+        jPanel1.setLayout(new java.awt.BorderLayout());
+
+        jSplitPane6.setDividerSize(3);
+        jSplitPane6.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
+        jSplitPane6.setMinimumSize(new java.awt.Dimension(500, 900));
+        jSplitPane6.setName(""); // NOI18N
+        jSplitPane6.setPreferredSize(new java.awt.Dimension(500, 900));
+
+        jPanel11.setBorder(javax.swing.BorderFactory.createTitledBorder("Stack"));
+        jPanel11.setMaximumSize(new java.awt.Dimension(300, 400));
+        jPanel11.setMinimumSize(new java.awt.Dimension(300, 400));
+        jPanel11.setPreferredSize(new java.awt.Dimension(300, 400));
+        jPanel11.setLayout(new java.awt.BorderLayout());
+
+        jScrollPane4.setBorder(null);
+
+        jTable2.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null}
+            },
+            new String [] {
+                "Title 1", "Title 2", "Title 3", "Title 4"
+            }
+        ));
+        jScrollPane4.setViewportView(jTable2);
+
+        jPanel11.add(jScrollPane4, java.awt.BorderLayout.CENTER);
+
+        jToolBar6.setFloatable(false);
+        jToolBar6.setOpaque(false);
+
+        buttonDesc1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/ascending.png"))); // NOI18N
+        buttonDesc1.setBorderPainted(false);
+        buttonDesc1.setEnabled(false);
+        buttonDesc1.setFocusable(false);
+        buttonDesc1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        buttonDesc1.setPreferredSize(new java.awt.Dimension(26, 21));
+        buttonDesc1.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        buttonDesc1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonDesc1ActionPerformed(evt);
+            }
+        });
+        jToolBar6.add(buttonDesc1);
+
+        buttonHex1.setText("dec");
+        buttonHex1.setBorderPainted(false);
+        buttonHex1.setFocusable(false);
+        buttonHex1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        buttonHex1.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        buttonHex1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonHex1ActionPerformed(evt);
+            }
+        });
+        jToolBar6.add(buttonHex1);
+        jToolBar6.add(jPanel12);
+
+        toggleButton8Bit1.setText("8 Bit");
+        toggleButton8Bit1.setBorderPainted(false);
+        toggleButton8Bit1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton8Bit1ActionPerformed(evt);
+            }
+        });
+        jToolBar6.add(toggleButton8Bit1);
+
+        toggleButton16Bit1.setText("16Bit");
+        toggleButton16Bit1.setBorderPainted(false);
+        toggleButton16Bit1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton16Bit1ActionPerformed(evt);
+            }
+        });
+        jToolBar6.add(toggleButton16Bit1);
+
+        toggleButton32Bit1.setSelected(true);
+        toggleButton32Bit1.setText("32Bit");
+        toggleButton32Bit1.setBorderPainted(false);
+        toggleButton32Bit1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton32Bit1ActionPerformed(evt);
+            }
+        });
+        jToolBar6.add(toggleButton32Bit1);
+
+        jPanel11.add(jToolBar6, java.awt.BorderLayout.NORTH);
+
+        jSplitPane6.setTopComponent(jPanel11);
+
+        jPanel6.setBorder(javax.swing.BorderFactory.createTitledBorder("Memory"));
+        jPanel6.setMaximumSize(new java.awt.Dimension(300, 450));
+        jPanel6.setMinimumSize(new java.awt.Dimension(300, 450));
+        jPanel6.setPreferredSize(new java.awt.Dimension(300, 450));
+        jPanel6.setRequestFocusEnabled(false);
+        jPanel6.setLayout(new java.awt.BorderLayout());
+
+        jScrollPane2.setBorder(null);
+
+        jTable1.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null}
+            },
+            new String [] {
+                "Title 1", "Title 2", "Title 3", "Title 4"
+            }
+        ));
+        jScrollPane2.setViewportView(jTable1);
+
+        jPanel6.add(jScrollPane2, java.awt.BorderLayout.CENTER);
+
+        jToolBar1.setFloatable(false);
+        jToolBar1.setOpaque(false);
+
+        buttonDesc.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/descending.png"))); // NOI18N
+        buttonDesc.setBorderPainted(false);
+        buttonDesc.setEnabled(false);
+        buttonDesc.setFocusable(false);
+        buttonDesc.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        buttonDesc.setPreferredSize(new java.awt.Dimension(26, 21));
+        buttonDesc.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        buttonDesc.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonDescActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(buttonDesc);
+
+        buttonHex.setText("dec");
+        buttonHex.setBorderPainted(false);
+        buttonHex.setFocusable(false);
+        buttonHex.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        buttonHex.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        buttonHex.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonHexActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(buttonHex);
+
+        toggleButtonHighlight.setText("highlight");
+        toggleButtonHighlight.setToolTipText("Highlight cells that registers are pointing to");
+        toggleButtonHighlight.setBorderPainted(false);
+        toggleButtonHighlight.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButtonHighlightActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(toggleButtonHighlight);
+        jToolBar1.add(jPanel9);
+
+        toggleButton8Bit.setText("8 Bit");
+        toggleButton8Bit.setBorderPainted(false);
+        toggleButton8Bit.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton8BitActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(toggleButton8Bit);
+
+        toggleButton16Bit.setText("16Bit");
+        toggleButton16Bit.setBorderPainted(false);
+        toggleButton16Bit.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton16BitActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(toggleButton16Bit);
+
+        toggleButton32Bit.setSelected(true);
+        toggleButton32Bit.setText("32Bit");
+        toggleButton32Bit.setBorderPainted(false);
+        toggleButton32Bit.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                toggleButton32BitActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(toggleButton32Bit);
+
+        jPanel6.add(jToolBar1, java.awt.BorderLayout.NORTH);
+
+        jSplitPane6.setBottomComponent(jPanel6);
+
+        jPanel1.add(jSplitPane6, java.awt.BorderLayout.CENTER);
+
+        jSplitPane1.setRightComponent(jPanel1);
+
+        jSplitPane4.setBorder(null);
+        jSplitPane4.setDividerLocation(700);
+        jSplitPane4.setDividerSize(3);
+        jSplitPane4.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
+        jSplitPane4.setContinuousLayout(true);
+
+        jPanel4.setLayout(new java.awt.BorderLayout());
+
+        jPanel7.setLayout(new java.awt.BorderLayout());
+
+        ErrorLabel.setForeground(new java.awt.Color(255, 0, 0));
+        jPanel7.add(ErrorLabel, java.awt.BorderLayout.CENTER);
+
+        jPanel4.add(jPanel7, java.awt.BorderLayout.SOUTH);
+
+        jScrollPane1.setBorder(null);
+
+        jPanel2.setLayout(new java.awt.BorderLayout());
+
+        NumberPanel.setPreferredSize(new java.awt.Dimension(40, 100));
+        NumberPanel.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                NumberPanelComponentResized(evt);
+            }
+        });
+        NumberPanel.setLayout(null);
+        jPanel2.add(NumberPanel, java.awt.BorderLayout.WEST);
+
+        jTextPane1.setBorder(null);
+        jTextPane1.addCaretListener(new javax.swing.event.CaretListener() {
+            public void caretUpdate(javax.swing.event.CaretEvent evt) {
+                jTextPane1CaretUpdate(evt);
+            }
+        });
+        jTextPane1.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                jTextPane1MouseClicked(evt);
+            }
+        });
+        jTextPane1.addInputMethodListener(new java.awt.event.InputMethodListener() {
+            public void caretPositionChanged(java.awt.event.InputMethodEvent evt) {
+            }
+            public void inputMethodTextChanged(java.awt.event.InputMethodEvent evt) {
+                jTextPane1InputMethodTextChanged(evt);
+            }
+        });
+        jTextPane1.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                jTextPane1KeyPressed(evt);
+            }
+            public void keyReleased(java.awt.event.KeyEvent evt) {
+                jTextPane1KeyReleased(evt);
+            }
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                jTextPane1KeyTyped(evt);
+            }
+        });
+        jPanel2.add(jTextPane1, java.awt.BorderLayout.CENTER);
+
+        jScrollPane1.setViewportView(jPanel2);
+
+        jPanel4.add(jScrollPane1, java.awt.BorderLayout.CENTER);
+
+        jSplitPane4.setLeftComponent(jPanel4);
+
+        jTabbedPane1.setTabPlacement(javax.swing.JTabbedPane.LEFT);
+        jTabbedPane1.setMinimumSize(new java.awt.Dimension(40, 23));
+        jTabbedPane1.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jTabbedPane1StateChanged(evt);
+            }
+        });
+
+        jPanelHelp.setMinimumSize(new java.awt.Dimension(350, 350));
+        jPanelHelp.setOpaque(false);
+        jPanelHelp.setPreferredSize(new java.awt.Dimension(350, 350));
+        jPanelHelp.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                jPanelHelpComponentResized(evt);
+            }
+        });
+        jPanelHelp.setLayout(new java.awt.BorderLayout());
+        jTabbedPane1.addTab("Help", jPanelHelp);
+
+        jSplitPane4.setRightComponent(jTabbedPane1);
+
+        jSplitPane1.setLeftComponent(jSplitPane4);
+
+        jSplitPane2.setRightComponent(jSplitPane1);
+
+        jSplitPane3.setBorder(null);
+        jSplitPane3.setDividerSize(3);
+        jSplitPane3.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
+        jSplitPane2.setLeftComponent(jSplitPane3);
+
+        jTabbedPane3.setMaximumSize(new java.awt.Dimension(400, 500));
+        jTabbedPane3.setMinimumSize(new java.awt.Dimension(300, 98));
+
+        jToolBar5.setFloatable(false);
+        jToolBar5.setOrientation(javax.swing.SwingConstants.VERTICAL);
+        jToolBar5.setRollover(true);
+        jToolBar5.add(filler6);
+
+        jToolBar3.setFloatable(false);
+        jToolBar3.setRollover(true);
+        jToolBar3.setAutoscrolls(true);
+        jToolBar3.setBorderPainted(false);
+        jToolBar3.setOpaque(false);
+
+        jToggleButton9.setText("bin");
+        jToggleButton9.setMaximumSize(new java.awt.Dimension(45, 27));
+        jToggleButton9.setMinimumSize(new java.awt.Dimension(45, 27));
+        jToggleButton9.setPreferredSize(new java.awt.Dimension(45, 27));
+        jToggleButton9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jToggleButton9ActionPerformed(evt);
+            }
+        });
+        jToolBar3.add(jToggleButton9);
+
+        jToggleButton10.setSelected(true);
+        jToggleButton10.setText("±dec");
+        jToggleButton10.setMaximumSize(new java.awt.Dimension(45, 27));
+        jToggleButton10.setMinimumSize(new java.awt.Dimension(45, 27));
+        jToggleButton10.setPreferredSize(new java.awt.Dimension(45, 27));
+        jToggleButton10.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jToggleButton10ActionPerformed(evt);
+            }
+        });
+        jToolBar3.add(jToggleButton10);
+
+        jToggleButton11.setText("dec");
+        jToggleButton11.setMaximumSize(new java.awt.Dimension(45, 27));
+        jToggleButton11.setMinimumSize(new java.awt.Dimension(45, 27));
+        jToggleButton11.setPreferredSize(new java.awt.Dimension(45, 27));
+        jToggleButton11.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jToggleButton11ActionPerformed(evt);
+            }
+        });
+        jToolBar3.add(jToggleButton11);
+
+        jToggleButton12.setText("hex");
+        jToggleButton12.setMaximumSize(new java.awt.Dimension(45, 27));
+        jToggleButton12.setMinimumSize(new java.awt.Dimension(45, 27));
+        jToggleButton12.setPreferredSize(new java.awt.Dimension(45, 27));
+        jToggleButton12.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jToggleButton12ActionPerformed(evt);
+            }
+        });
+        jToolBar3.add(jToggleButton12);
+
+        jToolBar5.add(jToolBar3);
+        jToolBar5.add(filler5);
+
+        jPanel5.setBorder(javax.swing.BorderFactory.createTitledBorder("Flags"));
+        jPanel5.setMaximumSize(new java.awt.Dimension(180, 55));
+        jPanel5.setPreferredSize(new java.awt.Dimension(180, 55));
+
+        jCheckCarry.setText("CF");
+        jCheckCarry.setToolTipText("Carry Flag");
+        jCheckCarry.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        jCheckCarry.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        jCheckCarry.setVerticalAlignment(javax.swing.SwingConstants.BOTTOM);
+        jCheckCarry.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        jCheckCarry.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jCheckCarryActionPerformed(evt);
+            }
+        });
+
+        jCheckOverflow.setText("OF");
+        jCheckOverflow.setToolTipText("Overflow Flag");
+        jCheckOverflow.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        jCheckOverflow.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        jCheckOverflow.setVerticalAlignment(javax.swing.SwingConstants.BOTTOM);
+        jCheckOverflow.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        jCheckOverflow.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jCheckOverflowActionPerformed(evt);
+            }
+        });
+
+        jCheckSign.setText("SF");
+        jCheckSign.setToolTipText("Sign Flag");
+        jCheckSign.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        jCheckSign.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        jCheckSign.setVerticalAlignment(javax.swing.SwingConstants.BOTTOM);
+        jCheckSign.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        jCheckSign.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jCheckSignActionPerformed(evt);
+            }
+        });
+
+        jCheckParity.setText("PF");
+        jCheckParity.setToolTipText("Parity Flag");
+        jCheckParity.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        jCheckParity.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        jCheckParity.setVerticalAlignment(javax.swing.SwingConstants.BOTTOM);
+        jCheckParity.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        jCheckParity.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jCheckParityActionPerformed(evt);
+            }
+        });
+
+        jCheckZero.setText("ZF");
+        jCheckZero.setToolTipText("Zero Flag");
+        jCheckZero.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        jCheckZero.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        jCheckZero.setVerticalAlignment(javax.swing.SwingConstants.BOTTOM);
+        jCheckZero.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        jCheckZero.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jCheckZeroActionPerformed(evt);
+            }
+        });
+
+        org.jdesktop.layout.GroupLayout jPanel5Layout = new org.jdesktop.layout.GroupLayout(jPanel5);
+        jPanel5.setLayout(jPanel5Layout);
+        jPanel5Layout.setHorizontalGroup(
+            jPanel5Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel5Layout.createSequentialGroup()
+                .add(38, 38, 38)
+                .add(jCheckOverflow, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 15, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jCheckSign)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jCheckZero)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jCheckParity)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jCheckCarry, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 14, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(38, Short.MAX_VALUE))
+        );
+        jPanel5Layout.setVerticalGroup(
+            jPanel5Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel5Layout.createSequentialGroup()
+                .add(jPanel5Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jCheckCarry)
+                    .add(jCheckOverflow)
+                    .add(jCheckParity)
+                    .add(jCheckSign)
+                    .add(jCheckZero))
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+
+        jToolBar5.add(jPanel5);
+
+        jScrollPane3.setToolTipText("");
+        jScrollPane3.setAutoscrolls(true);
+        jScrollPane3.setPreferredSize(new java.awt.Dimension(100, 114));
+
+        jPanel8.setAutoscrolls(true);
+        jPanel8.setMaximumSize(new java.awt.Dimension(10000, 2147483647));
+        jPanel8.setMinimumSize(new java.awt.Dimension(300, 112));
+        jPanel8.setPreferredSize(new java.awt.Dimension(300, 112));
+        jPanel8.addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent evt) {
+                jPanel8ComponentResized(evt);
+            }
+        });
+        jPanel8.setLayout(new java.awt.BorderLayout());
+
+        jPanel10.setLayout(new java.awt.BorderLayout());
+
+        jToolBar2.setFloatable(false);
+        jToolBar2.setRollover(true);
+        jToolBar2.setBorderPainted(false);
+        jToolBar2.setOpaque(false);
+        jPanel10.add(jToolBar2, java.awt.BorderLayout.NORTH);
+
+        jPanel3.setAutoscrolls(true);
+        jPanel3.setLayout(new javax.swing.BoxLayout(jPanel3, javax.swing.BoxLayout.Y_AXIS));
+        jPanel10.add(jPanel3, java.awt.BorderLayout.CENTER);
+
+        jPanel8.add(jPanel10, java.awt.BorderLayout.NORTH);
+
+        jScrollPane3.setViewportView(jPanel8);
+
+        jToolBar5.add(jScrollPane3);
+        jScrollPane3.getViewport().setMinimumSize(new Dimension(160, 200));
+        jScrollPane3.getViewport().setPreferredSize(new Dimension(160, 200));
+
+        jTabbedPane3.addTab("Registers & Flags", jToolBar5);
+
+        jToolBar4.setFloatable(false);
+        jToolBar4.setOrientation(javax.swing.SwingConstants.VERTICAL);
+        jToolBar4.setRollover(true);
+        jToolBar4.add(filler7);
+
+        jPanel14.setLayout(new java.awt.BorderLayout());
+        jToolBar4.add(jPanel14);
+
+        jTabbedPane3.addTab("FPU", jToolBar4);
+
+        jSplitPane2.setLeftComponent(jTabbedPane3);
+
+        add(jSplitPane2, java.awt.BorderLayout.CENTER);
+    }// </editor-fold>//GEN-END:initComponents
+
+    private void jToggleButton9ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jToggleButton9ActionPerformed
+        setRegisterMode(DataSpace.BIN);
+    }//GEN-LAST:event_jToggleButton9ActionPerformed
+
+    private void jToggleButton10ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jToggleButton10ActionPerformed
+        setRegisterMode(DataSpace.SIGNED);
+    }//GEN-LAST:event_jToggleButton10ActionPerformed
+
+    private void jToggleButton11ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jToggleButton11ActionPerformed
+        setRegisterMode(DataSpace.UNSIGNED);
+    }//GEN-LAST:event_jToggleButton11ActionPerformed
+
+    private void jToggleButton12ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jToggleButton12ActionPerformed
+        setRegisterMode(DataSpace.HEX);
+    }//GEN-LAST:event_jToggleButton12ActionPerformed
+
+    private void buttonHexActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonHexActionPerformed
+        if (buttonHex.getText().equals("hex")) {
+            buttonHex.setText("dec");
+        } else {
+            buttonHex.setText("hex");
+        }
+        model.enableDescending(model.isDescending());
+    }//GEN-LAST:event_buttonHexActionPerformed
+
+    private void buttonDescActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonDescActionPerformed
+        /**
+         * boolean descending = model.isDescending();
+         *
+         * if(descending){ buttonDesc.setIcon(new
+         * javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/descending.png")));
+         * } else{ buttonDesc.setIcon(new
+         * javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/ascending.png")));
+         * } model.enableDescending(!descending); 
+        *
+         */
+    }//GEN-LAST:event_buttonDescActionPerformed
+
+    private void jCheckZeroActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckZeroActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jCheckZeroActionPerformed
+
+    private void jCheckParityActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckParityActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jCheckParityActionPerformed
+
+    private void jCheckSignActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckSignActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jCheckSignActionPerformed
+
+    private void jCheckOverflowActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckOverflowActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jCheckOverflowActionPerformed
+
+    private void jCheckCarryActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckCarryActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jCheckCarryActionPerformed
+
+    private void buttonDesc1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonDesc1ActionPerformed
+        // TODO add your handling code here:
+
+    }//GEN-LAST:event_buttonDesc1ActionPerformed
+
+    private void buttonHex1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonHex1ActionPerformed
+        // TODO add your handling code here:
+        if (buttonHex1.getText().equals("hex")) {
+            buttonHex1.setText("dec");
+        } else {
+            buttonHex1.setText("hex");
+        }
+        modelStack.enableDescending(modelStack.isDescending());
+    }//GEN-LAST:event_buttonHex1ActionPerformed
+
+    private void toggleButton8Bit1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_toggleButton8Bit1ActionPerformed
+        // TODO add your handling code here:
+        jTable2.scrollRectToVisible(new Rectangle(0, 0, 0, 0));
+        modelStack.setMode(MemoryTableModel.BYTE);
+        toggleButton32Bit1.setSelected(false);
+        toggleButton16Bit1.setSelected(false);
+        toggleButton8Bit1.setSelected(true);
+    }//GEN-LAST:event_toggleButton8Bit1ActionPerformed
+
+    private void toggleButton16Bit1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_toggleButton16Bit1ActionPerformed
+        // TODO add your handling code here:
+        jTable2.scrollRectToVisible(new Rectangle(0, 0, 0, 0));
+        modelStack.setMode(MemoryTableModel.WORD);
+        toggleButton32Bit1.setSelected(false);
+        toggleButton16Bit1.setSelected(true);
+        toggleButton8Bit1.setSelected(false);
+    }//GEN-LAST:event_toggleButton16Bit1ActionPerformed
+
+    private void toggleButton32Bit1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_toggleButton32Bit1ActionPerformed
+        // TODO add your handling code here:
+        jTable2.scrollRectToVisible(new Rectangle(0, 0, 0, 0));
+        modelStack.setMode(MemoryTableModel.DWORD);
+        toggleButton32Bit1.setSelected(true);
+        toggleButton16Bit1.setSelected(false);
+        toggleButton8Bit1.setSelected(false);
+    }//GEN-LAST:event_toggleButton32Bit1ActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1280,14 +1519,6 @@ public final class JasDocument extends javax.swing.JPanel {
     private void toggleButtonHighlightActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_toggleButtonHighlightActionPerformed
         updateMemoryHighlight(toggleButtonHighlight.isSelected());
     }// GEN-LAST:event_toggleButtonHighlightActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void toggleButtonHexActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_toggleButtonHexActionPerformed
-        // trigger a redraw
-        model.enableDescending(model.isDescending());
-    }// GEN-LAST:event_toggleButtonHexActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1353,7 +1584,7 @@ public final class JasDocument extends javax.swing.JPanel {
      * @param evt the Event that triggered this action
      */
     private void jPanelHelpComponentResized(java.awt.event.ComponentEvent evt) {// GEN-FIRST:event_jPanelHelpComponentResized
-        frame.putProperty("split4.location", jSplitPane4.getDividerLocation());
+
     }// GEN-LAST:event_jPanelHelpComponentResized
 
     /**
@@ -1396,13 +1627,6 @@ public final class JasDocument extends javax.swing.JPanel {
     /**
      * @param evt the Event that triggered this action
      */
-    private void jToggleButton8ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jToggleButton8ActionPerformed
-        setRegisterMode(DataSpace.SIGNED);
-    }// GEN-LAST:event_jToggleButton8ActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
     private void jTextPane1InputMethodTextChanged(java.awt.event.InputMethodEvent evt) {// GEN-FIRST:event_jTextPane1InputMethodTextChanged
     }// GEN-LAST:event_jTextPane1InputMethodTextChanged
 
@@ -1411,27 +1635,6 @@ public final class JasDocument extends javax.swing.JPanel {
      */
     private void jTextPane1KeyTyped(java.awt.event.KeyEvent evt) {// GEN-FIRST:event_jTextPane1KeyTyped
     }// GEN-LAST:event_jTextPane1KeyTyped
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jToggleButton6ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jToggleButton6ActionPerformed
-        setRegisterMode(DataSpace.BIN);
-    }// GEN-LAST:event_jToggleButton6ActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jToggleButton7ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jToggleButton7ActionPerformed
-        setRegisterMode(DataSpace.UNSIGNED);
-    }// GEN-LAST:event_jToggleButton7ActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jToggleButton5ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jToggleButton5ActionPerformed
-        setRegisterMode(DataSpace.HEX);
-    }// GEN-LAST:event_jToggleButton5ActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1479,73 +1682,6 @@ public final class JasDocument extends javax.swing.JPanel {
     /**
      * @param evt the Event that triggered this action
      */
-    private void toggleButtonDescActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_toggleButtonDescActionPerformed
-
-        model.enableDescending(!model.isDescending());
-        toggleButtonDesc.setSelected(model.isDescending());
-
-    }// GEN-LAST:event_toggleButtonDescActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckDirectionActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckDirectionActionPerformed
-        data.fDirection = jCheckDirection.isSelected();
-    }// GEN-LAST:event_jCheckDirectionActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckTrapActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckTrapActionPerformed
-        data.fTrap = jCheckTrap.isSelected();
-    }// GEN-LAST:event_jCheckTrapActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckZeroActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckZeroActionPerformed
-        data.fZero = jCheckZero.isSelected();
-    }// GEN-LAST:event_jCheckZeroActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckSignActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckSignActionPerformed
-        data.fSign = jCheckSign.isSelected();
-    }// GEN-LAST:event_jCheckSignActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckOverflowActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckOverflowActionPerformed
-        data.fOverflow = jCheckOverflow.isSelected();
-    }// GEN-LAST:event_jCheckOverflowActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckCarryActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckCarryActionPerformed
-
-        data.fCarry = jCheckCarry.isSelected();
-    }// GEN-LAST:event_jCheckCarryActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckAuxiliaryActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckAuxiliaryActionPerformed
-        data.fAuxiliary = jCheckAuxiliary.isSelected();
-    }// GEN-LAST:event_jCheckAuxiliaryActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
-    private void jCheckParityActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jCheckParityActionPerformed
-        data.fParity = jCheckParity.isSelected();
-    }// GEN-LAST:event_jCheckParityActionPerformed
-
-    /**
-     * @param evt the Event that triggered this action
-     */
     private void jTextPane1CaretUpdate(javax.swing.event.CaretEvent evt) {// GEN-FIRST:event_jTextPane1CaretUpdate
         int lineNumber = highlighter.getLineNumberByOffset(evt.getDot());
         ParseError error = highlighter.getErrorByLineNumber(lineNumber);
@@ -1570,8 +1706,12 @@ public final class JasDocument extends javax.swing.JPanel {
     private void jTextPane1KeyPressed(java.awt.event.KeyEvent evt) {// GEN-FIRST:event_jTextPane1KeyPressed
     }// GEN-LAST:event_jTextPane1KeyPressed
 
-    public boolean isMemAddressAsHex() {
-        return toggleButtonHex.isSelected();
+    public boolean isMemAddressAsHex(boolean button) {
+        if (!button) {
+            return !buttonHex.getText().equals("hex");
+        } else {
+            return !buttonHex1.getText().equals("hex");
+        }
     }
 
     /**
@@ -1604,57 +1744,83 @@ public final class JasDocument extends javax.swing.JPanel {
         }
     }
 
-	// Variables declaration - do not modify//GEN-BEGIN:variables
-	private javax.swing.JLabel ErrorLabel;
-	private javax.swing.JPanel NumberPanel;
-	private javax.swing.JCheckBox jCheckAuxiliary;
-	private javax.swing.JCheckBox jCheckCarry;
-	private javax.swing.JCheckBox jCheckDirection;
-	private javax.swing.JCheckBox jCheckOverflow;
-	private javax.swing.JCheckBox jCheckParity;
-	private javax.swing.JCheckBox jCheckSign;
-	private javax.swing.JCheckBox jCheckTrap;
-	private javax.swing.JCheckBox jCheckZero;
-	private javax.swing.JMenuItem jMenuItem10;
-	private javax.swing.JMenuItem jMenuItem11;
-	private javax.swing.JMenuItem jMenuItem12;
-	private javax.swing.JMenuItem jMenuItem8;
-	private javax.swing.JMenuItem jMenuItem9;
-	private javax.swing.JPanel jPanel1;
-	private javax.swing.JPanel jPanel10;
-	private javax.swing.JPanel jPanel13;
-	private javax.swing.JPanel jPanel2;
-	private javax.swing.JPanel jPanel3;
-	private javax.swing.JPanel jPanel4;
-	private javax.swing.JPanel jPanel5;
-	private javax.swing.JPanel jPanel6;
-	private javax.swing.JPanel jPanel7;
-	private javax.swing.JPanel jPanel8;
-	private javax.swing.JPanel jPanel9;
-	private javax.swing.JPanel jPanelHelp;
-	private javax.swing.JPopupMenu jPopupMenu1;
-	private javax.swing.JScrollPane jScrollPane1;
-	private javax.swing.JScrollPane jScrollPane2;
-	private javax.swing.JSeparator jSeparator1;
-	private javax.swing.JSplitPane jSplitPane1;
-	private javax.swing.JSplitPane jSplitPane2;
-	private javax.swing.JSplitPane jSplitPane3;
-	private javax.swing.JSplitPane jSplitPane4;
-	private javax.swing.JTabbedPane jTabbedPane1;
-	private javax.swing.JTable jTable1;
-	private javax.swing.JTextPane jTextPane1;
-	private javax.swing.JToggleButton jToggleButton5;
-	private javax.swing.JToggleButton jToggleButton6;
-	private javax.swing.JToggleButton jToggleButton7;
-	private javax.swing.JToggleButton jToggleButton8;
-	private javax.swing.JToolBar jToolBar1;
-	private javax.swing.JToolBar jToolBar2;
-	private javax.swing.JToggleButton toggleButton16Bit;
-	private javax.swing.JToggleButton toggleButton32Bit;
-	private javax.swing.JToggleButton toggleButton8Bit;
-	private javax.swing.JToggleButton toggleButtonDesc;
-	private javax.swing.JToggleButton toggleButtonHex;
-	private javax.swing.JToggleButton toggleButtonHighlight;
-	
-	// End of variables declaration//GEN-END:variables
+    // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JLabel ErrorLabel;
+    private javax.swing.JPanel NumberPanel;
+    private javax.swing.JButton buttonDesc;
+    private javax.swing.JButton buttonDesc1;
+    private javax.swing.JButton buttonHex;
+    private javax.swing.JButton buttonHex1;
+    private javax.swing.Box.Filler filler5;
+    private javax.swing.Box.Filler filler6;
+    private javax.swing.Box.Filler filler7;
+    private javax.swing.JCheckBox jCheckCarry;
+    private javax.swing.JCheckBox jCheckOverflow;
+    private javax.swing.JCheckBox jCheckParity;
+    private javax.swing.JCheckBox jCheckSign;
+    private javax.swing.JCheckBox jCheckZero;
+    private javax.swing.JMenuItem jMenuItem10;
+    private javax.swing.JMenuItem jMenuItem11;
+    private javax.swing.JMenuItem jMenuItem12;
+    private javax.swing.JMenuItem jMenuItem8;
+    private javax.swing.JMenuItem jMenuItem9;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel10;
+    private javax.swing.JPanel jPanel11;
+    private javax.swing.JPanel jPanel12;
+    private javax.swing.JPanel jPanel14;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JPanel jPanel3;
+    private javax.swing.JPanel jPanel4;
+    private javax.swing.JPanel jPanel5;
+    private javax.swing.JPanel jPanel6;
+    private javax.swing.JPanel jPanel7;
+    private javax.swing.JPanel jPanel8;
+    private javax.swing.JPanel jPanel9;
+    private javax.swing.JPanel jPanelHelp;
+    private javax.swing.JPopupMenu jPopupMenu1;
+    private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane2;
+    private javax.swing.JScrollPane jScrollPane3;
+    private javax.swing.JScrollPane jScrollPane4;
+    private javax.swing.JSeparator jSeparator1;
+    private javax.swing.JSplitPane jSplitPane1;
+    private javax.swing.JSplitPane jSplitPane2;
+    private javax.swing.JSplitPane jSplitPane3;
+    private javax.swing.JSplitPane jSplitPane4;
+    private javax.swing.JSplitPane jSplitPane6;
+    private javax.swing.JTabbedPane jTabbedPane1;
+    private javax.swing.JTabbedPane jTabbedPane3;
+    private javax.swing.JTable jTable1;
+    private javax.swing.JTable jTable2;
+    private javax.swing.JTextPane jTextPane1;
+    private javax.swing.JToggleButton jToggleButton10;
+    private javax.swing.JToggleButton jToggleButton11;
+    private javax.swing.JToggleButton jToggleButton12;
+    private javax.swing.JToggleButton jToggleButton9;
+    private javax.swing.JToolBar jToolBar1;
+    private javax.swing.JToolBar jToolBar2;
+    private javax.swing.JToolBar jToolBar3;
+    private javax.swing.JToolBar jToolBar4;
+    private javax.swing.JToolBar jToolBar5;
+    private javax.swing.JToolBar jToolBar6;
+    private javax.swing.JToggleButton toggleButton16Bit;
+    private javax.swing.JToggleButton toggleButton16Bit1;
+    private javax.swing.JToggleButton toggleButton32Bit;
+    private javax.swing.JToggleButton toggleButton32Bit1;
+    private javax.swing.JToggleButton toggleButton8Bit;
+    private javax.swing.JToggleButton toggleButton8Bit1;
+    private javax.swing.JToggleButton toggleButtonHighlight;
+    // End of variables declaration//GEN-END:variables
+
+    public void turnStack() {
+        if (jSplitPane6.getTopComponent() != null) {
+            jSplitPane6.setTopComponent(null);
+            
+        } else {
+            jSplitPane6.setTopComponent(jPanel11);
+            
+
+        }
+    }
 }

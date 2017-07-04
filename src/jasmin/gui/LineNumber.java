@@ -14,6 +14,7 @@ import java.awt.event.MouseEvent;
  */
 public class LineNumber extends javax.swing.JPanel {
 	
+	private static final long serialVersionUID = 1L;
 	int line;
 	private JasDocument doc = null;
 	

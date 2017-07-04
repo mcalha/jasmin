@@ -59,6 +59,7 @@ public class MemoryTableRenderer implements TableCellRenderer {
 		Font font = label.getFont();
 		if (model.isDirty(row)) {
 			label.setFont(font.deriveFont(Font.BOLD));
+                        label.setForeground(Color.blue);
 		} else {
 			label.setFont(font.deriveFont(Font.PLAIN));
 		}
