@@ -230,7 +230,7 @@ public class MemoryTableModel implements TableModel {
 		int index = getRowIndex(rowIndex) + data.getMemAddressStart();
 		switch (columnIndex) {
 		case 0:
-			if (doc.isMemAddressAsHex()) {
+			if (doc.isMemAddressAsHex(descending)) {
 				return "0x" + Integer.toHexString(index).toUpperCase();
 			} else {
 				return index + "";

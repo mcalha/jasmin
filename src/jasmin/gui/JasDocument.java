@@ -1568,7 +1568,7 @@ public final class JasDocument extends javax.swing.JPanel {
     private void jMenuItem8ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jMenuItem8ActionPerformed
         getEditor().cut();
     }// GEN-LAST:event_jMenuItem8ActionPerformed
-
+    
     /**
      * @param evt the Event that triggered this action
      */
