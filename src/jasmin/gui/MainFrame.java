@@ -13,16 +13,18 @@ import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.text.AbstractDocument;
 import javax.swing.undo.*;
-import java.util.ArrayList;
 
 /**
  * @author Kai Orend
  */
 public class MainFrame extends javax.swing.JFrame {
 
+    private static final long serialVersionUID = 1L;
     private JasDocument document = null;
     private HelpBrowser helpDocument = null;
     public JFileChooser fileChooser = new JFileChooser();
+    //File to save snapshot
+    private File snapshot;
     public HelpLoader helpLoader = null;
     private Properties properties;
 
@@ -30,22 +32,17 @@ public class MainFrame extends javax.swing.JFrame {
      * Creates new form mainframe
      */
     public MainFrame() {
+        setIconImage(Toolkit.getDefaultToolkit().getImage(getClass().getResource("/jasmin/gui/resources/icons/logo.png")));
         File propfile = new File(System.getProperty("user.home") + File.separator + ".jasmin");
         try {
             properties = new Properties();
-
             if (!propfile.exists()) {
-
-                if (!propfile.createNewFile()) {
- 					JOptionPane.showMessageDialog(this, "Could not create:" + propfile.toString());
- 					System.exit(1);
- 				}
-
                 propfile.createNewFile();
                 putProperty("font", "Sans Serif");
                 putProperty("font.size", "12");
                 putProperty("memory", "4096");
                 putProperty("language", "en");
+                putProperty("repository", "32");
                 FileOutputStream out = new FileOutputStream(propfile);
                 try {
                     properties.store(out, "Jasmin configuration file");
@@ -92,6 +89,7 @@ public class MainFrame extends javax.swing.JFrame {
         this.putProperty("closed_well", 0);
         this.saveProperties();
 
+        /*shortcuts
         jMenuItemUndo.setAccelerator(KeyStroke.getKeyStroke('Z', Toolkit.getDefaultToolkit()
                 .getMenuShortcutKeyMask()));
         jMenuItemRedo.setAccelerator(KeyStroke.getKeyStroke('R', Toolkit.getDefaultToolkit()
@@ -111,6 +109,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenuItem16.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F7, 0));
 
         jMenuItem14.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F9, 0));
+        */
     }
 
     public void changeLnF(String LnF) {
@@ -130,7 +129,8 @@ public class MainFrame extends javax.swing.JFrame {
      * @param key
      */
     public String getProperty(String key) {
-        return properties.getProperty(key);
+        String result = properties.getProperty(key);
+        return result;
     }
 
     public int getProperty(String key, int oldvalue) {
@@ -171,29 +171,33 @@ public class MainFrame extends javax.swing.JFrame {
      */
     public synchronized void checkButtonStates() {
         if ((document != null) && !document.running) {
-            jButton16.setEnabled(true);
-            jButton17.setEnabled(document.hasSnapshot());
+            button_takesnapshot.setEnabled(true);
+            button_loadsnapshot.setEnabled(document.hasSnapshot());
 
             jMenu2.setEnabled(true);
-            jButton6.setEnabled(false);
-            jButton14.setEnabled(false);
 
-            jButton15.setEnabled(true);
+            button_play_clear3.setEnabled(true);
 
-            if (!jButton12.isEnabled()) {
-                jButton12.setEnabled(true);
+            if (!button_editpaste.isEnabled()) {
+                button_editpaste.setEnabled(true);
             }
             if (!jMenuItem4.isEnabled()) {
                 jMenuItem4.setEnabled(true);
             }
+            if (!jMenuItem_filesave.isEnabled()) {
+                jMenuItem_filesave.setEnabled(true);
+            }
             if (!jMenuItem6.isEnabled()) {
                 jMenuItem6.setEnabled(true);
             }
-            if (!save.isEnabled()) {
-                save.setEnabled(true);
+            if (!jMenuItem7.isEnabled()) {
+                jMenuItem7.setEnabled(true);
             }
-            if (!quickSave.isEnabled()) {
-                quickSave.setEnabled(true);
+            if (!button_filesaveas.isEnabled()) {
+                button_filesaveas.setEnabled(true);
+            }
+            if (!button_filesave.isEnabled()) {
+                button_filesave.setEnabled(true);
             }
             if (!delaySlider.isEnabled()) {
                 delaySlider.setEnabled(true);
@@ -207,36 +211,42 @@ public class MainFrame extends javax.swing.JFrame {
             if (!jMenuItem2.isEnabled()) {
                 jMenuItem2.setEnabled(true);
             }
-            if (!jButton13.isEnabled()) {
-                jButton13.setEnabled(true);
+            if (!button_play_stop.isEnabled()) {
+                button_play_stop.setEnabled(true);
             }
-            if (!jButton4.isEnabled()) {
-                jButton4.setEnabled(true);
+            if (!button_play_green.isEnabled()) {
+                button_play_green.setEnabled(true);
             }
-            if (!jButton5.isEnabled()) {
-                jButton5.setEnabled(true);
+            if (!button_play_step.isEnabled()) {
+                button_play_step.setEnabled(true);
             }
-            if (!jButton7.isEnabled()) {
-                jButton7.setEnabled(true);
+            if (!button_play_current.isEnabled()) {
+                button_play_current.setEnabled(true);
+            }
+            if (!buttonStack.isEnabled()) {
+                buttonStack.setEnabled(true);
+            }
+            if (!button_parameters.isEnabled()) {
+                button_parameters.setEnabled(true);
             }
             if (!document.getEditor().isEnabled()) {
                 document.getEditor().setEnabled(true);
             }
 
-            if (jButton8.isEnabled() != (document.undoManager.canUndo())) {
-                jButton8.setEnabled((document.undoManager.canUndo()));
+            if (button_undo.isEnabled() != (document.undoManager.canUndo())) {
+                button_undo.setEnabled((document.undoManager.canUndo()));
                 jMenuItemUndo.setEnabled((document.undoManager.canUndo()));
             }
-            if (jButton9.isEnabled() != (document.undoManager.canRedo())) {
-                jButton9.setEnabled((document.undoManager.canRedo()));
+            if (button_redo.isEnabled() != (document.undoManager.canRedo())) {
+                button_redo.setEnabled((document.undoManager.canRedo()));
                 jMenuItemRedo.setEnabled((document.undoManager.canRedo()));
             }
 
             boolean hasSelection = ((document.getEditor().getSelectionEnd()
                     - document.getEditor().getSelectionStart()) > 0);
-            if (jButton11.isEnabled() != hasSelection) {
-                jButton11.setEnabled(hasSelection);
-                jButton10.setEnabled(hasSelection);
+            if (button_editcopy.isEnabled() != hasSelection) {
+                button_editcopy.setEnabled(hasSelection);
+                button_editcut.setEnabled(hasSelection);
                 jMenuItem8.setEnabled(hasSelection);
                 jMenuItem9.setEnabled(hasSelection);
             }
@@ -244,60 +254,61 @@ public class MainFrame extends javax.swing.JFrame {
             jMenuItem15.setEnabled(document.running);
             jMenuItem13.setEnabled(!document.running);
 
-            jButton4.setIcon(new javax.swing.ImageIcon(getClass().getResource(
+            button_play_green.setIcon(new javax.swing.ImageIcon(getClass().getResource(
                     "/jasmin/gui/resources/icons/play_green.png")));
 
         } else {
-            jButton16.setEnabled(false);
-            jButton17.setEnabled(false);
+            button_takesnapshot.setEnabled(false);
+            button_loadsnapshot.setEnabled(false);
 
-            jButton8.setEnabled(false);
+            button_undo.setEnabled(false);
             jMenuItemUndo.setEnabled(false);
-            jButton9.setEnabled(false);
+            button_redo.setEnabled(false);
             jMenuItemRedo.setEnabled(false);
-            jButton11.setEnabled(false);
-            jButton10.setEnabled(false);
+            button_editcopy.setEnabled(false);
+            button_editcut.setEnabled(false);
             jMenuItem8.setEnabled(false);
             jMenuItem9.setEnabled(false);
             jMenuItem15.setEnabled(false);
 
-            jButton12.setEnabled(false);
+            button_editpaste.setEnabled(false);
             jMenuItem4.setEnabled(false);
+            jMenuItem_filesave.setEnabled(false);
             jMenuItem6.setEnabled(false);
-            save.setEnabled(false);
-            quickSave.setEnabled(false);
+            jMenuItem7.setEnabled(false);
+            button_filesaveas.setEnabled(false);
+            button_filesave.setEnabled(false);
             delaySlider.setEnabled(false);
             jMenuItem10.setEnabled(false);
             jMenu2.setEnabled(false);
             jMenuItem2.setEnabled(false);
-            jButton13.setEnabled(false);
-            jButton4.setEnabled(false);
-            jButton5.setEnabled(false);
-            jButton7.setEnabled(false);
-            jButton15.setEnabled(false);
+            button_play_stop.setEnabled(false);
+            button_play_green.setEnabled(false);
+            button_play_step.setEnabled(false);
+            button_play_current.setEnabled(false);
+            button_play_clear3.setEnabled(false);
+            buttonStack.setEnabled(false);
+            button_parameters.setEnabled(false);
             jMenu3.setEnabled(false);
         }
         if ((document != null) && document.running) {
-            jButton15.setEnabled(true);
+            button_play_clear3.setEnabled(true);
             jMenuItem13.setEnabled(false);
             jMenuItem14.setEnabled(false);
             jMenuItem15.setEnabled(false);
             delaySlider.setEnabled(true);
 
-            jButton4.setEnabled(true);
+            button_play_green.setEnabled(true);
 
             document.getEditor().setEnabled(false);
-            jButton4.setIcon(new javax.swing.ImageIcon(getClass().getResource(
+            button_play_green.setIcon(new javax.swing.ImageIcon(getClass().getResource(
                     "/jasmin/gui/resources/icons/play_pause.png")));
         }
-        if (helpDocument != null) {
-            jButton6.setEnabled(helpDocument.canBack());
-            jButton14.setEnabled(helpDocument.canForward());
-        }
+
     }
 
     public void open() {
-        JasDocument doc = new JasDocument(ErrorLabel, this);
+        JasDocument doc = new JasDocument(ErrorLabel, this, 0);
 
         if (doc.open()) {
             addDocument(doc);
@@ -332,30 +343,31 @@ public class MainFrame extends javax.swing.JFrame {
         jMenuItem17 = new javax.swing.JMenuItem();
         jPanel2 = new javax.swing.JPanel();
         jToolBar1 = new javax.swing.JToolBar();
-        jButton3 = new javax.swing.JButton();
-        jButton1 = new javax.swing.JButton();
-        save = new javax.swing.JButton();
-        quickSave = new javax.swing.JButton();
+        button_new = new javax.swing.JButton();
+        button_fileopen = new javax.swing.JButton();
+        button_filesave = new javax.swing.JButton();
+        button_filesaveas = new javax.swing.JButton();
         jPanel3 = new javax.swing.JPanel();
-        jButton8 = new javax.swing.JButton();
-        jButton9 = new javax.swing.JButton();
+        button_undo = new javax.swing.JButton();
+        button_redo = new javax.swing.JButton();
         jPanel5 = new javax.swing.JPanel();
-        jButton10 = new javax.swing.JButton();
-        jButton11 = new javax.swing.JButton();
-        jButton12 = new javax.swing.JButton();
-        jPanel4 = new javax.swing.JPanel();
-        jButton6 = new javax.swing.JButton();
-        jButton14 = new javax.swing.JButton();
+        button_editcut = new javax.swing.JButton();
+        button_editcopy = new javax.swing.JButton();
+        button_editpaste = new javax.swing.JButton();
         jPanel6 = new javax.swing.JPanel();
-        jButton4 = new javax.swing.JButton();
-        jButton5 = new javax.swing.JButton();
-        jButton7 = new javax.swing.JButton();
-        jButton13 = new javax.swing.JButton();
+        jPanel9 = new javax.swing.JPanel();
+        jPanel10 = new javax.swing.JPanel();
+        button_play_green = new javax.swing.JButton();
+        button_play_step = new javax.swing.JButton();
+        button_play_current = new javax.swing.JButton();
+        button_play_stop = new javax.swing.JButton();
+        button_play_clear3 = new javax.swing.JButton();
         jPanel7 = new javax.swing.JPanel();
-        jButton15 = new javax.swing.JButton();
         jPanel8 = new javax.swing.JPanel();
-        jButton16 = new javax.swing.JButton();
-        jButton17 = new javax.swing.JButton();
+        buttonStack = new javax.swing.JButton();
+        button_parameters = new javax.swing.JButton();
+        button_takesnapshot = new javax.swing.JButton();
+        button_loadsnapshot = new javax.swing.JButton();
         jSeparator7 = new javax.swing.JToolBar.Separator();
         jLabel1 = new javax.swing.JLabel();
         delaySlider = new javax.swing.JSlider();
@@ -366,8 +378,9 @@ public class MainFrame extends javax.swing.JFrame {
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu1 = new javax.swing.JMenu();
         jMenuItem5 = new javax.swing.JMenuItem();
-        jSeparator2 = new javax.swing.JSeparator();
         jMenuItem3 = new javax.swing.JMenuItem();
+        jSeparator2 = new javax.swing.JSeparator();
+        jMenuItem_filesave = new javax.swing.JMenuItem();
         jMenuItem4 = new javax.swing.JMenuItem();
         jSeparator3 = new javax.swing.JSeparator();
         jMenuItem6 = new javax.swing.JMenuItem();
@@ -390,6 +403,8 @@ public class MainFrame extends javax.swing.JFrame {
         jMenuItem15 = new javax.swing.JMenuItem();
         jMenuItem16 = new javax.swing.JMenuItem();
         jMenuItem14 = new javax.swing.JMenuItem();
+        jMenuItem_play_stop = new javax.swing.JMenuItem();
+        jMenuItem_play_clear3 = new javax.swing.JMenuItem();
 
         jMenuItem17.setText("Close Tab");
         jMenuItem17.addActionListener(new java.awt.event.ActionListener() {
@@ -414,51 +429,96 @@ public class MainFrame extends javax.swing.JFrame {
         jPanel2.setPreferredSize(new java.awt.Dimension(800, 600));
         jPanel2.setLayout(new java.awt.BorderLayout());
 
+        jToolBar1.setFloatable(false);
         jToolBar1.setRollover(true);
         jToolBar1.setDoubleBuffered(true);
+        jToolBar1.setPreferredSize(new java.awt.Dimension(855, 33));
 
-        jButton3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/new.png"))); // NOI18N
-        jButton3.setToolTipText("Create a new Document");
-        jButton3.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton3.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton3ActionPerformed(evt);
+        button_new.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/new.png"))); // NOI18N
+        button_new.setToolTipText("New");
+        button_new.setBorder(null);
+        button_new.setBorderPainted(false);
+        button_new.setContentAreaFilled(false);
+        button_new.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_new.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_newMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_newMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton3);
-
-        jButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/fileopen.png"))); // NOI18N
-        jButton1.setToolTipText("Open Sourcecode");
-        jButton1.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton1.addActionListener(new java.awt.event.ActionListener() {
+        button_new.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton1ActionPerformed(evt);
+                button_newActionPerformed(evt);
             }
         });
-        jToolBar1.add(jButton1);
+        jToolBar1.add(button_new);
 
-        save.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesaveas.png"))); // NOI18N
-        save.setToolTipText("Save Sourcecode");
-        save.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        save.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                saveActionPerformed(evt);
+        button_fileopen.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/fileopen.png"))); // NOI18N
+        button_fileopen.setToolTipText("Open...");
+        button_fileopen.setBorder(null);
+        button_fileopen.setBorderPainted(false);
+        button_fileopen.setContentAreaFilled(false);
+        button_fileopen.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_fileopen.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_fileopenMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_fileopenMouseExited(evt);
             }
         });
-        jToolBar1.add(save);
-
-        quickSave.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesave.png"))); // NOI18N
-        quickSave.setToolTipText("Quick save");
-        quickSave.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        quickSave.setFocusable(false);
-        quickSave.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        quickSave.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
-        quickSave.addActionListener(new java.awt.event.ActionListener() {
+        button_fileopen.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                quickSaveActionPerformed(evt);
+                button_fileopenActionPerformed(evt);
             }
         });
-        jToolBar1.add(quickSave);
+        jToolBar1.add(button_fileopen);
+
+        button_filesave.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesave.png"))); // NOI18N
+        button_filesave.setToolTipText("Save");
+        button_filesave.setBorder(null);
+        button_filesave.setBorderPainted(false);
+        button_filesave.setContentAreaFilled(false);
+        button_filesave.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        button_filesave.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_filesave.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        button_filesave.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_filesaveMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_filesaveMouseExited(evt);
+            }
+        });
+        button_filesave.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_filesaveActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_filesave);
+
+        button_filesaveas.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesaveas.png"))); // NOI18N
+        button_filesaveas.setToolTipText("Save As...");
+        button_filesaveas.setBorder(null);
+        button_filesaveas.setBorderPainted(false);
+        button_filesaveas.setContentAreaFilled(false);
+        button_filesaveas.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_filesaveas.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_filesaveasMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_filesaveasMouseExited(evt);
+            }
+        });
+        button_filesaveas.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_filesaveasActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_filesaveas);
 
         jPanel3.setMaximumSize(new java.awt.Dimension(10, 3));
         jPanel3.setMinimumSize(new java.awt.Dimension(10, 3));
@@ -466,25 +526,47 @@ public class MainFrame extends javax.swing.JFrame {
         jPanel3.setPreferredSize(new java.awt.Dimension(10, 3));
         jToolBar1.add(jPanel3);
 
-        jButton8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/undo.png"))); // NOI18N
-        jButton8.setToolTipText("Undo");
-        jButton8.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton8.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton8ActionPerformed(evt);
+        button_undo.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/undo.png"))); // NOI18N
+        button_undo.setToolTipText("Undo");
+        button_undo.setBorder(null);
+        button_undo.setBorderPainted(false);
+        button_undo.setContentAreaFilled(false);
+        button_undo.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_undo.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_undoMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_undoMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton8);
+        button_undo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_undoActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_undo);
 
-        jButton9.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/redo.png"))); // NOI18N
-        jButton9.setToolTipText("Redo");
-        jButton9.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton9.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton9ActionPerformed(evt);
+        button_redo.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/redo.png"))); // NOI18N
+        button_redo.setToolTipText("Redo");
+        button_redo.setBorder(null);
+        button_redo.setBorderPainted(false);
+        button_redo.setContentAreaFilled(false);
+        button_redo.setPreferredSize(new java.awt.Dimension(35, 30));
+        button_redo.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_redoMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_redoMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton9);
+        button_redo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_redoActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_redo);
 
         jPanel5.setMaximumSize(new java.awt.Dimension(10, 3));
         jPanel5.setMinimumSize(new java.awt.Dimension(10, 3));
@@ -492,61 +574,65 @@ public class MainFrame extends javax.swing.JFrame {
         jPanel5.setPreferredSize(new java.awt.Dimension(10, 3));
         jToolBar1.add(jPanel5);
 
-        jButton10.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcut.png"))); // NOI18N
-        jButton10.setToolTipText("Cut");
-        jButton10.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton10.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton10ActionPerformed(evt);
+        button_editcut.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcut.png"))); // NOI18N
+        button_editcut.setToolTipText("Cut");
+        button_editcut.setBorder(null);
+        button_editcut.setBorderPainted(false);
+        button_editcut.setContentAreaFilled(false);
+        button_editcut.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_editcutMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_editcutMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton10);
-
-        jButton11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcopy.png"))); // NOI18N
-        jButton11.setToolTipText("Copy");
-        jButton11.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton11.addActionListener(new java.awt.event.ActionListener() {
+        button_editcut.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton11ActionPerformed(evt);
+                button_editcutActionPerformed(evt);
             }
         });
-        jToolBar1.add(jButton11);
+        jToolBar1.add(button_editcut);
 
-        jButton12.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editpaste.png"))); // NOI18N
-        jButton12.setToolTipText("Paste");
-        jButton12.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton12.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton12ActionPerformed(evt);
+        button_editcopy.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcopy.png"))); // NOI18N
+        button_editcopy.setToolTipText("Copy");
+        button_editcopy.setBorder(null);
+        button_editcopy.setBorderPainted(false);
+        button_editcopy.setContentAreaFilled(false);
+        button_editcopy.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_editcopyMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_editcopyMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton12);
-
-        jPanel4.setMaximumSize(new java.awt.Dimension(10, 3));
-        jPanel4.setMinimumSize(new java.awt.Dimension(10, 3));
-        jPanel4.setOpaque(false);
-        jPanel4.setPreferredSize(new java.awt.Dimension(10, 3));
-        jToolBar1.add(jPanel4);
-
-        jButton6.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/back.png"))); // NOI18N
-        jButton6.setToolTipText("Go back");
-        jButton6.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton6.addActionListener(new java.awt.event.ActionListener() {
+        button_editcopy.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton6ActionPerformed(evt);
+                button_editcopyActionPerformed(evt);
             }
         });
-        jToolBar1.add(jButton6);
+        jToolBar1.add(button_editcopy);
 
-        jButton14.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/forward.png"))); // NOI18N
-        jButton14.setToolTipText("Go forward");
-        jButton14.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton14.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton14ActionPerformed(evt);
+        button_editpaste.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editpaste.png"))); // NOI18N
+        button_editpaste.setToolTipText("Paste");
+        button_editpaste.setBorder(null);
+        button_editpaste.setBorderPainted(false);
+        button_editpaste.setContentAreaFilled(false);
+        button_editpaste.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_editpasteMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_editpasteMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton14);
+        button_editpaste.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_editpasteActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_editpaste);
 
         jPanel6.setMaximumSize(new java.awt.Dimension(10, 3));
         jPanel6.setMinimumSize(new java.awt.Dimension(10, 3));
@@ -554,48 +640,117 @@ public class MainFrame extends javax.swing.JFrame {
         jPanel6.setPreferredSize(new java.awt.Dimension(10, 3));
         jToolBar1.add(jPanel6);
 
-        jButton4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_green.png"))); // NOI18N
-        jButton4.setToolTipText("Run the program");
-        jButton4.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton4.setPreferredSize(new java.awt.Dimension(24, 24));
-        jButton4.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton4ActionPerformed(evt);
-            }
-        });
-        jToolBar1.add(jButton4);
+        jPanel9.setMaximumSize(new java.awt.Dimension(10, 3));
+        jPanel9.setMinimumSize(new java.awt.Dimension(10, 3));
+        jPanel9.setOpaque(false);
+        jPanel9.setPreferredSize(new java.awt.Dimension(10, 3));
+        jToolBar1.add(jPanel9);
 
-        jButton5.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_step.png"))); // NOI18N
-        jButton5.setToolTipText("Execute the next command");
-        jButton5.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton5.setPreferredSize(new java.awt.Dimension(24, 24));
-        jButton5.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton5ActionPerformed(evt);
-            }
-        });
-        jToolBar1.add(jButton5);
+        jPanel10.setMaximumSize(new java.awt.Dimension(10, 3));
+        jPanel10.setMinimumSize(new java.awt.Dimension(10, 3));
+        jPanel10.setOpaque(false);
+        jPanel10.setPreferredSize(new java.awt.Dimension(10, 3));
+        jToolBar1.add(jPanel10);
 
-        jButton7.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_current.png"))); // NOI18N
-        jButton7.setToolTipText("Execute the line at the caret position without modifying the instruction pointer");
-        jButton7.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton7.setPreferredSize(new java.awt.Dimension(24, 24));
-        jButton7.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton7ActionPerformed(evt);
+        button_play_green.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_green.png"))); // NOI18N
+        button_play_green.setToolTipText("Run the program");
+        button_play_green.setBorder(null);
+        button_play_green.setBorderPainted(false);
+        button_play_green.setContentAreaFilled(false);
+        button_play_green.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_play_greenMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_play_greenMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton7);
+        button_play_green.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_play_greenActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_play_green);
 
-        jButton13.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_stop.png"))); // NOI18N
-        jButton13.setToolTipText("Stop the program");
-        jButton13.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton13.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton13ActionPerformed(evt);
+        button_play_step.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_step.png"))); // NOI18N
+        button_play_step.setToolTipText("Execute the command on the selected line");
+        button_play_step.setBorder(null);
+        button_play_step.setBorderPainted(false);
+        button_play_step.setContentAreaFilled(false);
+        button_play_step.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_play_stepMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_play_stepMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton13);
+        button_play_step.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_play_stepActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_play_step);
+
+        button_play_current.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_current.png"))); // NOI18N
+        button_play_current.setToolTipText("Execute the command on the selected line without modifying the instruction pointer");
+        button_play_current.setBorder(null);
+        button_play_current.setBorderPainted(false);
+        button_play_current.setContentAreaFilled(false);
+        button_play_current.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_play_currentMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_play_currentMouseExited(evt);
+            }
+        });
+        button_play_current.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_play_currentActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_play_current);
+
+        button_play_stop.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_stop.png"))); // NOI18N
+        button_play_stop.setToolTipText("Stop the program");
+        button_play_stop.setBorder(null);
+        button_play_stop.setBorderPainted(false);
+        button_play_stop.setContentAreaFilled(false);
+        button_play_stop.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_play_stopMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_play_stopMouseExited(evt);
+            }
+        });
+        button_play_stop.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_play_stopActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_play_stop);
+
+        button_play_clear3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_clear3.png"))); // NOI18N
+        button_play_clear3.setToolTipText("Reset the memory and all registers");
+        button_play_clear3.setBorder(null);
+        button_play_clear3.setBorderPainted(false);
+        button_play_clear3.setContentAreaFilled(false);
+        button_play_clear3.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_play_clear3MouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_play_clear3MouseExited(evt);
+            }
+        });
+        button_play_clear3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_play_clear3ActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_play_clear3);
 
         jPanel7.setMaximumSize(new java.awt.Dimension(10, 3));
         jPanel7.setMinimumSize(new java.awt.Dimension(10, 3));
@@ -603,41 +758,97 @@ public class MainFrame extends javax.swing.JFrame {
         jPanel7.setPreferredSize(new java.awt.Dimension(10, 3));
         jToolBar1.add(jPanel7);
 
-        jButton15.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_clear3.png"))); // NOI18N
-        jButton15.setToolTipText("Reset the memory and all registers");
-        jButton15.setBorder(null);
-        jButton15.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton15ActionPerformed(evt);
-            }
-        });
-        jToolBar1.add(jButton15);
-
         jPanel8.setMaximumSize(new java.awt.Dimension(10, 3));
         jPanel8.setMinimumSize(new java.awt.Dimension(10, 3));
         jPanel8.setOpaque(false);
         jPanel8.setPreferredSize(new java.awt.Dimension(10, 3));
         jToolBar1.add(jPanel8);
 
-        jButton16.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/takesnapshot.png"))); // NOI18N
-        jButton16.setToolTipText("Take Snapshot");
-        jButton16.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton16.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton16ActionPerformed(evt);
+        buttonStack.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/Network-Stack-iconFInal2.png"))); // NOI18N
+        buttonStack.setToolTipText("Turn On/Off Stack");
+        buttonStack.setBorder(null);
+        buttonStack.setBorderPainted(false);
+        buttonStack.setContentAreaFilled(false);
+        buttonStack.setFocusable(false);
+        buttonStack.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        buttonStack.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        buttonStack.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                buttonStackMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                buttonStackMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton16);
+        buttonStack.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonStackActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(buttonStack);
 
-        jButton17.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/loadsnapshot.png"))); // NOI18N
-        jButton17.setToolTipText("Load Snapshot");
-        jButton17.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jButton17.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jButton17ActionPerformed(evt);
+        button_parameters.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/parameters.png"))); // NOI18N
+        button_parameters.setToolTipText("Enter parameters");
+        button_parameters.setBorder(null);
+        button_parameters.setBorderPainted(false);
+        button_parameters.setContentAreaFilled(false);
+        button_parameters.setFocusable(false);
+        button_parameters.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        button_parameters.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        button_parameters.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_parametersMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_parametersMouseExited(evt);
             }
         });
-        jToolBar1.add(jButton17);
+        button_parameters.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_parametersActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_parameters);
+
+        button_takesnapshot.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/takesnapshot.png"))); // NOI18N
+        button_takesnapshot.setToolTipText("Save Memory");
+        button_takesnapshot.setBorder(null);
+        button_takesnapshot.setBorderPainted(false);
+        button_takesnapshot.setContentAreaFilled(false);
+        button_takesnapshot.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_takesnapshotMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_takesnapshotMouseExited(evt);
+            }
+        });
+        button_takesnapshot.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_takesnapshotActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_takesnapshot);
+
+        button_loadsnapshot.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/loadsnapshot.png"))); // NOI18N
+        button_loadsnapshot.setToolTipText("Load Memory");
+        button_loadsnapshot.setBorder(null);
+        button_loadsnapshot.setBorderPainted(false);
+        button_loadsnapshot.setContentAreaFilled(false);
+        button_loadsnapshot.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button_loadsnapshotMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button_loadsnapshotMouseExited(evt);
+            }
+        });
+        button_loadsnapshot.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                button_loadsnapshotActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(button_loadsnapshot);
         jToolBar1.add(jSeparator7);
 
         jLabel1.setText("Operation delay:");
@@ -646,6 +857,7 @@ public class MainFrame extends javax.swing.JFrame {
         delaySlider.setMaximum(250);
         delaySlider.setValue(0);
         delaySlider.setMaximumSize(new java.awt.Dimension(150, 27));
+        delaySlider.setOpaque(false);
         delaySlider.setPreferredSize(new java.awt.Dimension(150, 27));
         delaySlider.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
@@ -656,11 +868,19 @@ public class MainFrame extends javax.swing.JFrame {
 
         delayText.setEditable(false);
         delayText.setText("0 ms");
+        delayText.setBorder(null);
         delayText.setMaximumSize(new java.awt.Dimension(70, 30));
+        delayText.setOpaque(false);
+        delayText.setPreferredSize(new java.awt.Dimension(15, 14));
         jToolBar1.add(delayText);
 
         jPanel2.add(jToolBar1, java.awt.BorderLayout.NORTH);
 
+        DocTab.addContainerListener(new java.awt.event.ContainerAdapter() {
+            public void componentRemoved(java.awt.event.ContainerEvent evt) {
+                DocTabComponentRemoved(evt);
+            }
+        });
         DocTab.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 DocTabStateChanged(evt);
@@ -669,11 +889,6 @@ public class MainFrame extends javax.swing.JFrame {
         DocTab.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 DocTabMouseClicked(evt);
-            }
-        });
-        DocTab.addContainerListener(new java.awt.event.ContainerAdapter() {
-            public void componentRemoved(java.awt.event.ContainerEvent evt) {
-                DocTabComponentRemoved(evt);
             }
         });
         jPanel2.add(DocTab, java.awt.BorderLayout.CENTER);
@@ -688,14 +903,20 @@ public class MainFrame extends javax.swing.JFrame {
 
         getContentPane().add(jPanel2, java.awt.BorderLayout.CENTER);
 
+        jMenuBar1.setBackground(new java.awt.Color(255, 255, 255));
+        jMenuBar1.setBorderPainted(false);
+
         jMenu1.setMnemonic('f');
         jMenu1.setText("File");
+        jMenu1.setContentAreaFilled(false);
+        jMenu1.setPreferredSize(new java.awt.Dimension(30, 19));
         jMenu1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jMenu1ActionPerformed(evt);
             }
         });
 
+        jMenuItem5.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem5.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/new.png"))); // NOI18N
         jMenuItem5.setText("New");
         jMenuItem5.addActionListener(new java.awt.event.ActionListener() {
@@ -704,20 +925,32 @@ public class MainFrame extends javax.swing.JFrame {
             }
         });
         jMenu1.add(jMenuItem5);
-        jMenu1.add(jSeparator2);
 
+        jMenuItem3.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/fileopen.png"))); // NOI18N
-        jMenuItem3.setText("Open Code");
+        jMenuItem3.setText("Open...");
         jMenuItem3.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jMenuItem3ActionPerformed(evt);
             }
         });
         jMenu1.add(jMenuItem3);
+        jMenu1.add(jSeparator2);
 
+        jMenuItem_filesave.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_MASK));
+        jMenuItem_filesave.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesave.png"))); // NOI18N
+        jMenuItem_filesave.setText("Save");
+        jMenuItem_filesave.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem_filesaveActionPerformed(evt);
+            }
+        });
+        jMenu1.add(jMenuItem_filesave);
+
+        jMenuItem4.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.SHIFT_MASK | java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/filesaveas.png"))); // NOI18N
         jMenuItem4.setMnemonic('s');
-        jMenuItem4.setText("Save Code");
+        jMenuItem4.setText("Save As...");
         jMenuItem4.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jMenuItem4ActionPerformed(evt);
@@ -726,7 +959,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenu1.add(jMenuItem4);
         jMenu1.add(jSeparator3);
 
-        jMenuItem6.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/leer.gif"))); // NOI18N
+        jMenuItem6.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/takesnapshot.png"))); // NOI18N
         jMenuItem6.setText("Save Memory");
         jMenuItem6.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -735,7 +968,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu1.add(jMenuItem6);
 
-        jMenuItem7.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/leer.gif"))); // NOI18N
+        jMenuItem7.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/loadsnapshot.png"))); // NOI18N
         jMenuItem7.setText("Load Memory");
         jMenuItem7.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -745,7 +978,8 @@ public class MainFrame extends javax.swing.JFrame {
         jMenu1.add(jMenuItem7);
         jMenu1.add(jSeparator4);
 
-        jMenuItem2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/leer.gif"))); // NOI18N
+        jMenuItem2.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, java.awt.event.InputEvent.CTRL_MASK));
+        jMenuItem2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/close.png"))); // NOI18N
         jMenuItem2.setText("Close Document");
         jMenuItem2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -755,7 +989,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenu1.add(jMenuItem2);
         jMenu1.add(jSeparator6);
 
-        jMenuItem18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/leer.gif"))); // NOI18N
+        jMenuItem18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/configuration.png"))); // NOI18N
         jMenuItem18.setText("Configuration");
         jMenuItem18.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -765,7 +999,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenu1.add(jMenuItem18);
         jMenu1.add(jSeparator5);
 
-        jMenuItem1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/leer.gif"))); // NOI18N
+        jMenuItem1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/exit.png"))); // NOI18N
         jMenuItem1.setMnemonic('e');
         jMenuItem1.setText("Exit");
         jMenuItem1.addActionListener(new java.awt.event.ActionListener() {
@@ -777,10 +1011,14 @@ public class MainFrame extends javax.swing.JFrame {
 
         jMenuBar1.add(jMenu1);
 
+        jMenu2.setBorder(null);
         jMenu2.setMnemonic('E');
         jMenu2.setText("Edit");
         jMenu2.setToolTipText("");
+        jMenu2.setContentAreaFilled(false);
+        jMenu2.setPreferredSize(new java.awt.Dimension(30, 19));
 
+        jMenuItemUndo.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Z, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItemUndo.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/undo.png"))); // NOI18N
         jMenuItemUndo.setMnemonic('u');
         jMenuItemUndo.setText("Undo");
@@ -791,6 +1029,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu2.add(jMenuItemUndo);
 
+        jMenuItemRedo.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItemRedo.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/redo.png"))); // NOI18N
         jMenuItemRedo.setMnemonic('r');
         jMenuItemRedo.setText("Redo");
@@ -802,6 +1041,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenu2.add(jMenuItemRedo);
         jMenu2.add(jSeparator1);
 
+        jMenuItem8.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcut.png"))); // NOI18N
         jMenuItem8.setMnemonic('t');
         jMenuItem8.setText("Cut");
@@ -812,6 +1052,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu2.add(jMenuItem8);
 
+        jMenuItem9.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem9.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editcopy.png"))); // NOI18N
         jMenuItem9.setMnemonic('c');
         jMenuItem9.setText("Copy");
@@ -822,6 +1063,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu2.add(jMenuItem9);
 
+        jMenuItem10.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_V, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem10.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/editpaste.png"))); // NOI18N
         jMenuItem10.setMnemonic('p');
         jMenuItem10.setText("Paste");
@@ -834,9 +1076,13 @@ public class MainFrame extends javax.swing.JFrame {
 
         jMenuBar1.add(jMenu2);
 
+        jMenu3.setBorder(null);
         jMenu3.setMnemonic('r');
         jMenu3.setText("Run");
+        jMenu3.setContentAreaFilled(false);
+        jMenu3.setPreferredSize(new java.awt.Dimension(30, 19));
 
+        jMenuItem13.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F5, 0));
         jMenuItem13.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_green.png"))); // NOI18N
         jMenuItem13.setMnemonic('r');
         jMenuItem13.setText("Run");
@@ -857,6 +1103,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu3.add(jMenuItem15);
 
+        jMenuItem16.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F6, 0));
         jMenuItem16.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_step.png"))); // NOI18N
         jMenuItem16.setMnemonic('s');
         jMenuItem16.setText("Step");
@@ -867,6 +1114,7 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu3.add(jMenuItem16);
 
+        jMenuItem14.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F7, 0));
         jMenuItem14.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_current.png"))); // NOI18N
         jMenuItem14.setMnemonic('e');
         jMenuItem14.setText("Execute current line");
@@ -877,6 +1125,26 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu3.add(jMenuItem14);
 
+        jMenuItem_play_stop.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F8, 0));
+        jMenuItem_play_stop.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_stop.png"))); // NOI18N
+        jMenuItem_play_stop.setText("Stop");
+        jMenuItem_play_stop.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem_play_stopActionPerformed(evt);
+            }
+        });
+        jMenu3.add(jMenuItem_play_stop);
+
+        jMenuItem_play_clear3.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F9, 0));
+        jMenuItem_play_clear3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/jasmin/gui/resources/icons/play_clear3.png"))); // NOI18N
+        jMenuItem_play_clear3.setText("Reset");
+        jMenuItem_play_clear3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem_play_clear3ActionPerformed(evt);
+            }
+        });
+        jMenu3.add(jMenuItem_play_clear3);
+
         jMenuBar1.add(jMenu3);
 
         setJMenuBar(jMenuBar1);
@@ -884,13 +1152,260 @@ public class MainFrame extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void quickSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_quickSaveActionPerformed
+    private void button_filesaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_button_filesaveActionPerformed
         document.quickSave();
-    }//GEN-LAST:event_quickSaveActionPerformed
+    }//GEN-LAST:event_button_filesaveActionPerformed
 
     private void delaySliderStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_delaySliderStateChanged
         delayText.setText(delaySlider.getValue() + " ms");
     }//GEN-LAST:event_delaySliderStateChanged
+
+    private void button_play_greenMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_greenMouseEntered
+        if(button_play_green.isEnabled()){
+            button_play_green.setOpaque(true);
+            button_play_green.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_play_greenMouseEntered
+
+    private void button_play_greenMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_greenMouseExited
+        button_play_green.setOpaque(false);
+    }//GEN-LAST:event_button_play_greenMouseExited
+
+    private void button_newMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_newMouseEntered
+        if(button_new.isEnabled()){
+            button_new.setOpaque(true);
+            button_new.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_newMouseEntered
+
+    private void button_newMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_newMouseExited
+        button_new.setOpaque(false);
+    }//GEN-LAST:event_button_newMouseExited
+
+    private void button_fileopenMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_fileopenMouseEntered
+        if(button_fileopen.isEnabled()){
+            button_fileopen.setOpaque(true);
+            button_fileopen.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_fileopenMouseEntered
+
+    private void button_fileopenMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_fileopenMouseExited
+        button_fileopen.setOpaque(false);
+    }//GEN-LAST:event_button_fileopenMouseExited
+
+    private void button_filesaveMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_filesaveMouseEntered
+        if(button_filesave.isEnabled()){
+            button_filesave.setOpaque(true);
+            button_filesave.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_filesaveMouseEntered
+
+    private void button_filesaveMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_filesaveMouseExited
+        button_filesave.setOpaque(false);
+    }//GEN-LAST:event_button_filesaveMouseExited
+
+    private void button_filesaveasMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_filesaveasMouseEntered
+        if(button_filesaveas.isEnabled()){
+            button_filesaveas.setOpaque(true);
+            button_filesaveas.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_filesaveasMouseEntered
+
+    private void button_filesaveasMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_filesaveasMouseExited
+        button_filesaveas.setOpaque(false);
+    }//GEN-LAST:event_button_filesaveasMouseExited
+
+    private void button_undoMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_undoMouseEntered
+        if(button_undo.isEnabled()){
+            button_undo.setOpaque(true);
+            button_undo.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_undoMouseEntered
+
+    private void button_undoMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_undoMouseExited
+        button_undo.setOpaque(false);
+        
+        if(!button_undo.isEnabled()){
+            button_undo.setBackground(Color.decode("#e0e0e0"));
+        }
+    }//GEN-LAST:event_button_undoMouseExited
+
+    private void button_redoMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_redoMouseEntered
+        if(button_redo.isEnabled()){
+            button_redo.setOpaque(true);
+            button_redo.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_redoMouseEntered
+
+    private void button_redoMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_redoMouseExited
+        button_redo.setOpaque(false);
+        
+        if(!button_redo.isEnabled()){
+            button_redo.setBackground(Color.decode("#e0e0e0"));
+        }
+    }//GEN-LAST:event_button_redoMouseExited
+
+    private void button_play_stepMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_stepMouseEntered
+        if(button_play_step.isEnabled()){
+            button_play_step.setOpaque(true);
+            button_play_step.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_play_stepMouseEntered
+
+    private void button_play_stepMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_stepMouseExited
+        button_play_step.setOpaque(false);
+    }//GEN-LAST:event_button_play_stepMouseExited
+
+    private void button_play_currentMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_currentMouseEntered
+        if(button_play_current.isEnabled()){
+            button_play_current.setOpaque(true);
+            button_play_current.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_play_currentMouseEntered
+
+    private void button_play_currentMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_currentMouseExited
+        button_play_current.setOpaque(false);
+    }//GEN-LAST:event_button_play_currentMouseExited
+
+    private void button_play_stopMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_stopMouseEntered
+        if(button_play_stop.isEnabled()){
+            button_play_stop.setOpaque(true);
+            button_play_stop.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_play_stopMouseEntered
+
+    private void button_play_stopMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_stopMouseExited
+        button_play_stop.setOpaque(false);
+    }//GEN-LAST:event_button_play_stopMouseExited
+
+    private void button_play_clear3MouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_clear3MouseEntered
+        if(button_play_clear3.isEnabled()){
+            button_play_clear3.setOpaque(true);
+            button_play_clear3.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_play_clear3MouseEntered
+
+    private void button_play_clear3MouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_play_clear3MouseExited
+        button_play_clear3.setOpaque(false);
+    }//GEN-LAST:event_button_play_clear3MouseExited
+
+    private void jMenuItem_filesaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem_filesaveActionPerformed
+        document.quickSave();
+    }//GEN-LAST:event_jMenuItem_filesaveActionPerformed
+
+    private void jMenuItem_play_stopActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem_play_stopActionPerformed
+        document.pauseProgram();
+        //Thread.yield();
+        document.data.setInstructionPointer(0);
+        document.updateAll();
+        checkButtonStates();
+    }//GEN-LAST:event_jMenuItem_play_stopActionPerformed
+
+    private void jMenuItem_play_clear3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem_play_clear3ActionPerformed
+        document.data.clear();
+        document.clearAll();
+        document.updateAll();
+        document.clearErrorLine();
+    }//GEN-LAST:event_jMenuItem_play_clear3ActionPerformed
+
+    private void button_editcutMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editcutMouseEntered
+        if(button_editcut.isEnabled()){
+            button_editcut.setOpaque(true);
+            button_editcut.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_editcutMouseEntered
+
+    private void button_editcutMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editcutMouseExited
+        button_editcut.setOpaque(false);
+        
+        if(!button_editcut.isEnabled()){
+            button_editcut.setBackground(Color.decode("#e0e0e0"));
+        }
+    }//GEN-LAST:event_button_editcutMouseExited
+
+    private void button_editcopyMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editcopyMouseEntered
+        if(button_editcopy.isEnabled()){
+            button_editcopy.setOpaque(true);
+            button_editcopy.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_editcopyMouseEntered
+
+    private void button_editcopyMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editcopyMouseExited
+        button_editcopy.setOpaque(false);
+        
+        if(!button_editcopy.isEnabled()){
+            button_editcopy.setBackground(Color.decode("#e0e0e0"));
+        }
+    }//GEN-LAST:event_button_editcopyMouseExited
+
+    private void button_editpasteMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editpasteMouseEntered
+        if(button_editpaste.isEnabled()){
+            button_editpaste.setOpaque(true);
+            button_editpaste.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_editpasteMouseEntered
+
+    private void button_editpasteMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_editpasteMouseExited
+        button_editpaste.setOpaque(false);
+    }//GEN-LAST:event_button_editpasteMouseExited
+
+    private void button_takesnapshotMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_takesnapshotMouseEntered
+        if(button_takesnapshot.isEnabled()){
+            button_takesnapshot.setOpaque(true);
+            button_takesnapshot.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_takesnapshotMouseEntered
+
+    private void button_takesnapshotMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_takesnapshotMouseExited
+        button_takesnapshot.setOpaque(false);
+    }//GEN-LAST:event_button_takesnapshotMouseExited
+
+    private void button_loadsnapshotMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_loadsnapshotMouseEntered
+        if(button_loadsnapshot.isEnabled()){
+            button_loadsnapshot.setOpaque(true);
+            button_loadsnapshot.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_loadsnapshotMouseEntered
+
+    private void button_loadsnapshotMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_loadsnapshotMouseExited
+        button_loadsnapshot.setOpaque(false);
+    }//GEN-LAST:event_button_loadsnapshotMouseExited
+
+    private void button_parametersMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_parametersMouseEntered
+        if(button_parameters.isEnabled()){
+            button_parameters.setOpaque(true);
+            button_parameters.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_button_parametersMouseEntered
+
+    private void button_parametersMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_button_parametersMouseExited
+        button_parameters.setOpaque(false);
+    }//GEN-LAST:event_button_parametersMouseExited
+
+    private void button_parametersActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_button_parametersActionPerformed
+        // TODO add your handling code here:
+            JFrame frame = new JFrame();
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.getContentPane().add(new ParamLinux(frame));
+            frame.pack();
+            frame.setVisible(true);
+        
+    }//GEN-LAST:event_button_parametersActionPerformed
+
+    private void buttonStackMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_buttonStackMouseEntered
+        if(buttonStack.isEnabled()){
+            buttonStack.setOpaque(true);
+            buttonStack.setBackground(Color.decode("#b3d9ff"));
+        }
+    }//GEN-LAST:event_buttonStackMouseEntered
+
+    private void buttonStackMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_buttonStackMouseExited
+        buttonStack.setOpaque(false);
+    }//GEN-LAST:event_buttonStackMouseExited
+
+    private void buttonStackActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonStackActionPerformed
+        document.turnStack();
+    }//GEN-LAST:event_buttonStackActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -911,20 +1426,23 @@ public class MainFrame extends javax.swing.JFrame {
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton17ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton17ActionPerformed
+    private void button_loadsnapshotActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_loadsnapshotActionPerformed
+        document.loadFile(snapshot);
         document.resumeSnapshot();
         checkButtonStates();
-    }// GEN-LAST:event_jButton17ActionPerformed
+    }// GEN-LAST:event_button_loadsnapshotActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton16ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton16ActionPerformed
+    private void button_takesnapshotActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_takesnapshotActionPerformed
 
+        snapshot = new File(System.getProperty("user.home") + File.separator + "snapshot.asm");
+        document.writeFile(snapshot);
         document.takeSnapshot();
-
         checkButtonStates();
-    }// GEN-LAST:event_jButton16ActionPerformed
+        
+    }// GEN-LAST:event_button_takesnapshotActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -936,12 +1454,12 @@ public class MainFrame extends javax.swing.JFrame {
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton15ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton15ActionPerformed
+    private void button_play_clear3ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_play_clear3ActionPerformed
         document.data.clear();
         document.clearAll();
         document.updateAll();
         document.clearErrorLine();
-    }// GEN-LAST:event_jButton15ActionPerformed
+    }// GEN-LAST:event_button_play_clear3ActionPerformed
 
     public void saveProperties() {
         try {
@@ -980,20 +1498,20 @@ public class MainFrame extends javax.swing.JFrame {
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton14ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton14ActionPerformed
+    private void button_forwardActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_forwardActionPerformed
         if (helpDocument != null) {
             helpDocument.forward();
         }
-    }// GEN-LAST:event_jButton14ActionPerformed
+    }// GEN-LAST:event_button_forwardActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton6ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton6ActionPerformed
+    private void button_backActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_backActionPerformed
         if (helpDocument != null) {
             helpDocument.back();
         }
-    }// GEN-LAST:event_jButton6ActionPerformed
+    }// GEN-LAST:event_button_backActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1070,16 +1588,16 @@ public class MainFrame extends javax.swing.JFrame {
     /**
      * @param evt the Event that triggered this action
      */
-    private void saveActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton2ActionPerformed
+    private void button_filesaveasActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_filesaveasActionPerformed
         save();
-    }// GEN-LAST:event_jButton2ActionPerformed
+    }// GEN-LAST:event_button_filesaveasActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton1ActionPerformed
+    private void button_fileopenActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_fileopenActionPerformed
         open();
-    }// GEN-LAST:event_jButton1ActionPerformed
+    }// GEN-LAST:event_button_fileopenActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1136,101 +1654,87 @@ public class MainFrame extends javax.swing.JFrame {
     }// GEN-LAST:event_jMenuItem8ActionPerformed
 
     private void jMenuItem5ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jMenuItem5ActionPerformed
-        jButton3ActionPerformed(evt);
+        button_newActionPerformed(evt);
     }// GEN-LAST:event_jMenuItem5ActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton13ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton13ActionPerformed
+    private void button_play_stopActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_play_stopActionPerformed
         document.pauseProgram();
         //Thread.yield();
         document.data.setInstructionPointer(0);
         document.updateAll();
         checkButtonStates();
-    }// GEN-LAST:event_jButton13ActionPerformed
+    }// GEN-LAST:event_button_play_stopActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton9ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton9ActionPerformed
+    private void button_redoActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_redoActionPerformed
         document.undoManager.redo();
         checkButtonStates();
-    }// GEN-LAST:event_jButton9ActionPerformed
+    }// GEN-LAST:event_button_redoActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton8ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton8ActionPerformed
+    private void button_undoActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_undoActionPerformed
         document.undoManager.undo();
         checkButtonStates();
-    }// GEN-LAST:event_jButton8ActionPerformed
+    }// GEN-LAST:event_button_undoActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton12ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton12ActionPerformed
+    private void button_editpasteActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_editpasteActionPerformed
         document.getEditor().paste();
         checkButtonStates();
-    }// GEN-LAST:event_jButton12ActionPerformed
+    }// GEN-LAST:event_button_editpasteActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton11ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton11ActionPerformed
+    private void button_editcopyActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_editcopyActionPerformed
         document.getEditor().copy();
         checkButtonStates();
-    }// GEN-LAST:event_jButton11ActionPerformed
+    }// GEN-LAST:event_button_editcopyActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton10ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton10ActionPerformed
+    private void button_editcutActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_editcutActionPerformed
         document.getEditor().cut();
         checkButtonStates();
-    }// GEN-LAST:event_jButton10ActionPerformed
+    }// GEN-LAST:event_button_editcutActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton7ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton7ActionPerformed
+    private void button_play_currentActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_play_currentActionPerformed
         document.executeCurrentLine();
         checkButtonStates();
-    }// GEN-LAST:event_jButton7ActionPerformed
+    }// GEN-LAST:event_button_play_currentActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton4ActionPerformed
-        
-        //JFrame frame = new JFrame("Command Line Parameters");
-        //String input = JOptionPane.showInputDialog(frame, "What parameters would you like to pass?");
-        //ArrayList<Integer> paraPorNaPilha = new ArrayList<Integer>();
-        
-        //if (!input.equals("")) {
-        //    for (int i = 0; i < input.length(); i++) { //de 0 ate length
-        //        paraPorNaPilha.add((int) input.charAt(i));
-        //    }
-        //}   
-        
-        //fica em "paraPorNaPilha" a sequencia de codigos ascii da command line
-        //sendo os ultimos elementos os primeiros caracteres
-
+    private void button_play_greenActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_play_greenActionPerformed
         if (document.running) {
             document.pauseProgram();
         } else {
             document.runProgram();
         }
         checkButtonStates();
-    }// GEN-LAST:event_jButton4ActionPerformed
+    }// GEN-LAST:event_button_play_greenActionPerformed
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton5ActionPerformed
+    private void button_play_stepActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_play_stepActionPerformed
         document.step();
         checkButtonStates();
-    }// GEN-LAST:event_jButton5ActionPerformed
+    }// GEN-LAST:event_button_play_stepActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1256,17 +1760,17 @@ public class MainFrame extends javax.swing.JFrame {
     }// GEN-LAST:event_DocTabStateChanged
 
     public void newDocument() {
-        addDocument(new JasDocument(ErrorLabel, this));
+        addDocument(new JasDocument(ErrorLabel, this, DocTab.getTabCount()));
         helpDocument = null;
     }
 
     /**
      * @param evt the Event that triggered this action
      */
-    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton3ActionPerformed
+    private void button_newActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_button_newActionPerformed
 
         newDocument();
-    }// GEN-LAST:event_jButton3ActionPerformed
+    }// GEN-LAST:event_button_newActionPerformed
 
     /**
      * @param evt the Event that triggered this action
@@ -1343,24 +1847,26 @@ public class MainFrame extends javax.swing.JFrame {
     private javax.swing.JPopupMenu CloseMenu;
     private javax.swing.JTabbedPane DocTab;
     private javax.swing.JLabel ErrorLabel;
+    private javax.swing.JButton buttonStack;
+    private javax.swing.JButton button_editcopy;
+    private javax.swing.JButton button_editcut;
+    private javax.swing.JButton button_editpaste;
+    private javax.swing.JButton button_fileopen;
+    private javax.swing.JButton button_filesave;
+    private javax.swing.JButton button_filesaveas;
+    private javax.swing.JButton button_loadsnapshot;
+    private javax.swing.JButton button_new;
+    private javax.swing.JButton button_parameters;
+    private javax.swing.JButton button_play_clear3;
+    private javax.swing.JButton button_play_current;
+    private javax.swing.JButton button_play_green;
+    private javax.swing.JButton button_play_step;
+    private javax.swing.JButton button_play_stop;
+    private javax.swing.JButton button_redo;
+    private javax.swing.JButton button_takesnapshot;
+    private javax.swing.JButton button_undo;
     private javax.swing.JSlider delaySlider;
     private javax.swing.JTextField delayText;
-    private javax.swing.JButton jButton1;
-    private javax.swing.JButton jButton10;
-    private javax.swing.JButton jButton11;
-    private javax.swing.JButton jButton12;
-    private javax.swing.JButton jButton13;
-    private javax.swing.JButton jButton14;
-    private javax.swing.JButton jButton15;
-    private javax.swing.JButton jButton16;
-    private javax.swing.JButton jButton17;
-    private javax.swing.JButton jButton3;
-    private javax.swing.JButton jButton4;
-    private javax.swing.JButton jButton5;
-    private javax.swing.JButton jButton6;
-    private javax.swing.JButton jButton7;
-    private javax.swing.JButton jButton8;
-    private javax.swing.JButton jButton9;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JMenu jMenu1;
     private javax.swing.JMenu jMenu2;
@@ -1384,14 +1890,18 @@ public class MainFrame extends javax.swing.JFrame {
     private javax.swing.JMenuItem jMenuItem9;
     private javax.swing.JMenuItem jMenuItemRedo;
     private javax.swing.JMenuItem jMenuItemUndo;
+    private javax.swing.JMenuItem jMenuItem_filesave;
+    private javax.swing.JMenuItem jMenuItem_play_clear3;
+    private javax.swing.JMenuItem jMenuItem_play_stop;
     private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
-    private javax.swing.JPanel jPanel4;
     private javax.swing.JPanel jPanel5;
     private javax.swing.JPanel jPanel6;
     private javax.swing.JPanel jPanel7;
     private javax.swing.JPanel jPanel8;
+    private javax.swing.JPanel jPanel9;
     private javax.swing.JSeparator jSeparator1;
     private javax.swing.JSeparator jSeparator2;
     private javax.swing.JSeparator jSeparator3;
@@ -1400,8 +1910,6 @@ public class MainFrame extends javax.swing.JFrame {
     private javax.swing.JSeparator jSeparator6;
     private javax.swing.JToolBar.Separator jSeparator7;
     private javax.swing.JToolBar jToolBar1;
-    private javax.swing.JButton quickSave;
-    private javax.swing.JButton save;
     // End of variables declaration//GEN-END:variables
 
 }

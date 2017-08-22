@@ -30,6 +30,12 @@ public class RegisterSet {
 	 * the double word, for example EAX
 	 */
 	public static int E_X = 8;
+        
+        /**
+	 * the quad word, for example RAX
+	 */
+	public static int R__ = 16;
+        
 	
 	/**
 	 * String names
