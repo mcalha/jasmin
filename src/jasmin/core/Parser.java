@@ -161,9 +161,7 @@ public class Parser {
 						sizeExplicit = true;
 					} else if (!Op.matches(type, Op.IMM)) {
 						size = getOperandSize(argument, type);
-					} else {
-                                                size = arguments.get(arguments.size()-1).address.size;
-                                        }
+					}
 					// update the type information with the size, e.g. we had MEM and now get M32
 					type = getSizedOperandType(argument, type, size);
 					// add the argument to the list of arguments
